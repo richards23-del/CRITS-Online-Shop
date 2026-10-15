@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "CRITS Online Shop"
+description = "A responsive online shop for CRITS Limited, Uganda, with a product catalogue, quote-request basket, contact details, and staff catalogue and enquiry management."
+version = "1.0.0"
+id = "artifacts/crits-shop"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25380
+
+[services.development]
+run = "pnpm --filter @workspace/crits-shop run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/crits-shop", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/crits-shop/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25380"
+BASE_PATH = "/"

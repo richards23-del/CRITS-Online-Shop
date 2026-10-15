@@ -1,0 +1,122 @@
+# Project Brief: CRITS Limited Online Shop
+
+Act as a senior product designer, full-stack developer, e-commerce architect and security-minded technical writer. Design and build a polished, functional, responsive e-commerce website for CRITS Limited, a technology and business IT supplier based in Uganda.
+
+Deliver a working application, not just a concept or static mock-up. Use the project’s existing framework and conventions where available. If no stack has been chosen, select a maintainable modern stack with a relational database, secure server-side validation and clear deployment instructions. Explain any major technical decisions.
+
+## 1. Brand and content
+
+Use the supplied CRITS Limited logo as the primary brand asset. Preserve its proportions and clear space. Inspect the logo and derive the site’s palette from its actual colours. Do not invent a competing palette. Create accessible colour combinations for text, backgrounds, buttons and focus states.
+
+Use **Sora** for headings and **Inter** for body copy and interface text, with appropriate sans-serif fallbacks. The visual style should feel modern, credible and premium: strong typography, considered spacing, restrained motion, clear product photography and a consistent component system. Do not use emojis.
+
+The site should present CRITS Limited as a professional technology supplier and service provider. Public profile information available for reference:
+
+- LinkedIn page name: CRITS LIMITED
+- Listed industry: IT Services and IT Consulting
+- Listed location: Kampala, Kireka, Namugongo, Uganda
+- The profile says the company supports business IT needs, computer and printer challenges, system configuration and IT consultancy.
+- The profile lists “Quality Redifined” as its tagline. Treat “Quality Redefined” as a proposed spelling correction and confirm it before publication.
+- The profile’s “About” section uses the name “Candid Services,” despite the page being titled CRITS LIMITED. Flag this discrepancy for CRITS to resolve. Do not publish “Candid Services,” the founding year or company-size claims until the business confirms they are accurate and appropriate for the website.
+
+Use clear, original website copy based on confirmed information. Do not copy errors from the profile or invent testimonials, certifications, partnerships, delivery promises, warranties or company claims.
+
+Social profile links:
+- Instagram: https://www.instagram.com/crits_ltd/
+- LinkedIn: https://www.linkedin.com/company/candid-services-ltd/
+
+Include these links in the footer and contact area. Use the supplied contact details when available. If a phone number, WhatsApp number, email address or full postal address is missing, leave a clearly labelled configuration field or draft placeholder for the CRITS administrator. Never invent contact details.
+
+Jiji currently lists the seller’s location as Kireka Namugongo Road, Kireka, Kampala, and hours as Monday–Saturday, 09:00–18:00. Treat these as details to confirm with CRITS before publishing them as official website contact information.
+
+## 2. Product catalogue and Jiji investigation
+
+Use CRITS Limited’s Jiji Uganda shop as the reference point for the initial catalogue:
+https://jiji.ug/shop/crits-ltd-co-ug
+
+Investigate and document the most appropriate way to maintain the CRITS website catalogue using the Jiji shop. Check for an official API, permitted product feed, seller export, account export or written integration option. Record what was checked, the result, any permission or account requirements, and the date of the investigation.
+
+Do not scrape Jiji or automatically copy its product descriptions, photos, page content or other material without confirming that the method is permitted and CRITS has the necessary rights. Review Jiji’s current Terms of Use and obtain written guidance or permission from Jiji where needed. Jiji’s terms address user content, intellectual property and use of platform materials: https://jiji.ug/rules.html.
+
+If an official, permitted integration is unavailable, build an easy catalogue-management workflow for CRITS staff. Support manual edits and practical CSV import/export so staff can maintain products without developer assistance. Keep the Jiji listing URL and last-verified date with each product where applicable. Do not claim the website stays synchronised with Jiji unless a working, permitted integration has been confirmed.
+
+Use only products that CRITS approves for its own catalogue. Exclude unrelated listings and service adverts from the product catalogue. Keep any service listings in a separate services area if CRITS confirms they should appear on the website. Product prices, stock and availability can change; provide an admin-controlled availability status and a “request a quote” option for items whose current price or stock needs confirmation.
+
+Start with these suggested categories, adapting them to the verified catalogue:
+
+- Printers and copiers
+- Printer cartridges and consumables
+- Laptops and computers
+- CCTV and security systems
+- Networking equipment
+- Servers
+- Stationery and classroom supplies
+- ICT accessories
+- Printing and signage products
+- Other technology products supplied by CRITS
+
+Support product details such as title, brand, model, category, condition, description, specifications, images, price in Ugandan shillings (UGX), stock or availability status, SKU where available, source listing URL and last-verified date. Clearly distinguish new, used and refurbished items wherever relevant. Do not invent specifications or present unverified product information as fact.
+
+## 3. Customer-facing experience
+
+Build the following pages and flows:
+
+- **Homepage:** Professional CRITS branding, clear value proposition, prominent product search, category navigation, featured products, service highlights where confirmed, and clear contact and enquiry calls to action.
+- **Catalogue:** Searchable and filterable product grid with category, brand, condition, price and availability filters where data exists. Include sorting, pagination or progressive loading, and useful empty states.
+- **Product detail:** Product images, verified specifications, condition, price or quote status, availability, related products and a prominent “Add to enquiry basket” action.
+- **Enquiry basket:** Let customers add multiple products and quantities, review their selections and request a quotation or place an order enquiry.
+- **Enquiry/order form:** Capture only necessary customer details, including name, preferred contact method, phone or email, organisation where relevant, delivery/location notes and an optional message. Show a clear submission confirmation.
+- **Contact page:** Show verified business contact details, location and hours; link to Instagram and LinkedIn; provide a contact form and map only when a verified address is available.
+- **About and services:** Use concise, approved copy based on verified company information. Keep unresolved profile details in draft status until CRITS confirms them.
+
+Make the site mobile-first and usable on small screens. Meet WCAG accessibility expectations for keyboard use, visible focus, contrast, form labels, semantic structure, image descriptions and reduced-motion preferences. Optimise images and loading performance. Include useful page titles, descriptions, share previews and product structured data where supported.
+
+WhatsApp enquiries should use a verified, administrator-configured number and a prefilled message containing selected product names and quantities. If no number is configured, show the standard enquiry form instead. Do not create fake contact links.
+
+## 4. Admin and back end
+
+Build a secure admin dashboard with authentication and role-appropriate access. Admin users should be able to:
+
+- Create, edit, archive and publish products
+- Manage categories and product images
+- Update prices, condition, specifications, stock and availability
+- Import and export catalogue data using a documented CSV template
+- Review and update customer enquiries and their statuses
+- Search and filter enquiries by date, status and contact details
+- See the source listing URL and last-verified date for imported or referenced products
+- View basic product and enquiry analytics
+
+Store products, categories, administrators and enquiries in a database. Validate input on the server, protect admin routes, apply rate limiting and spam protection to public forms, and avoid exposing secrets or customer information. Back up the database and document how to restore it. Provide a privacy notice and retention settings for enquiries; confirm applicable local requirements before launch.
+
+## 5. Innovation and future readiness
+
+Implement practical, transparent enhancements where they fit the first release:
+
+- Related-product suggestions based on category and product attributes
+- Useful search suggestions and typo-tolerant product search
+- Enquiry messages generated from the customer’s basket for review before sending
+- Basic analytics for product views, searches and enquiry submissions
+- Stock or availability labels controlled by CRITS staff
+
+Keep AI-generated descriptions as editable drafts that require staff review before publication. Do not let AI invent prices, stock, warranties or technical specifications.
+
+Structure the system so payments, delivery options and inventory-management integrations can be added later. Do not enable payment collection until CRITS supplies and approves a payment provider and configuration.
+
+## 6. Deliverables and acceptance criteria
+
+Deliver:
+
+1. A working, responsive CRITS online shop
+2. Product and category database
+3. Admin dashboard and catalogue update workflow
+4. Search, filtering and product detail pages
+5. Enquiry basket and customer enquiry/order system
+6. Jiji integration feasibility report with sources, findings and recommended maintenance method
+7. API or integration documentation if an approved integration is available
+8. Security and verification report covering the implemented features and known limitations
+9. Deployment, environment-variable, backup and restore documentation
+10. Source code and version-control repository
+
+Before handover, verify the primary customer journeys on desktop and mobile: browse and filter products, open a product, add it to the enquiry basket, submit an enquiry, and manage that enquiry in the admin dashboard. Verify admin access controls, form validation, error states and the CSV workflow. Do not report a feature as complete unless it has been implemented and verified.
+
+Provide a short launch checklist identifying any CRITS decisions or missing assets still required, including the logo file, approved contact details, confirmation of the CRITS/Candid Services relationship, approved tagline, product-data permissions, and the verified initial product catalogue.

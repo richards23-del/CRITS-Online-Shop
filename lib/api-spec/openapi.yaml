@@ -10,6 +10,16 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: catalogue
+    description: Public product catalogue
+  - name: enquiries
+    description: Customer quote requests
+  - name: analytics
+    description: Privacy-conscious product and search metrics
+  - name: admin
+    description: Staff catalogue and enquiry management
+  - name: storage
+    description: Product image uploads
 paths:
   /healthz:
     get:
@@ -24,6 +34,418 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /products:
+    get:
+      operationId: listProducts
+      tags: [catalogue]
+      summary: Search and filter published products
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: category
+          schema: { type: string }
+        - in: query
+          name: brand
+          schema: { type: string }
+        - in: query
+          name: condition
+          schema: { $ref: "#/components/schemas/ProductCondition" }
+        - in: query
+          name: availability
+          schema: { $ref: "#/components/schemas/ProductAvailability" }
+        - in: query
+          name: minPrice
+          schema: { type: integer, minimum: 0 }
+        - in: query
+          name: maxPrice
+          schema: { type: integer, minimum: 0 }
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [featured, newest, price-low, price-high, popular]
+            default: featured
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 48, default: 12 }
+        - in: query
+          name: featured
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Published products matching the supplied filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPage"
+  /products/{slug}:
+    get:
+      operationId: getProduct
+      tags: [catalogue]
+      summary: Get a published product and related products
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+        "404":
+          description: Product not found
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [catalogue]
+      summary: List public product categories
+      responses:
+        "200":
+          description: Categories with published product counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Category" }
+  /enquiries:
+    post:
+      operationId: createEnquiry
+      tags: [enquiries]
+      summary: Submit a quote or contact enquiry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnquiryInput" }
+      responses:
+        "201":
+          description: Enquiry accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnquiryReceipt" }
+        "400":
+          description: Invalid enquiry
+        "429":
+          description: Too many requests
+  /analytics:
+    post:
+      operationId: recordAnalyticsEvent
+      tags: [analytics]
+      summary: Record a product view or catalogue search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnalyticsEventInput" }
+      responses:
+        "204":
+          description: Event recorded
+  /admin/authorize:
+    get:
+      operationId: checkAdminAccess
+      tags: [admin]
+      summary: Check whether the signed-in user is on the configured staff allowlist
+      responses:
+        "200":
+          description: Authorization status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAccess" }
+        "401":
+          description: Sign-in required
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      tags: [admin]
+      summary: Get live catalogue, enquiry, and view summaries
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOverview" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+  /admin/products:
+    get:
+      operationId: listAdminProducts
+      tags: [admin]
+      summary: List all staff-managed products
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: "#/components/schemas/ProductStatus" }
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+      responses:
+        "200":
+          description: Products including drafts and archived items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Product" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+    post:
+      operationId: createAdminProduct
+      tags: [admin]
+      summary: Create a catalogue product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "201":
+          description: Product created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "400":
+          description: Invalid product
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+  /admin/products/import:
+    post:
+      operationId: importAdminProducts
+      tags: [admin]
+      summary: Import a validated batch of products parsed from CSV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductImportInput" }
+      responses:
+        "200":
+          description: Number of products imported
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductImportResult" }
+        "400":
+          description: Invalid import batch
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+  /admin/products/{id}:
+    patch:
+      operationId: updateAdminProduct
+      tags: [admin]
+      summary: Update or archive a product
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductUpdate" }
+      responses:
+        "200":
+          description: Product updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "400":
+          description: Invalid product update
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+        "404":
+          description: Product not found
+  /admin/categories:
+    get:
+      operationId: listAdminCategories
+      tags: [admin]
+      summary: List categories for catalogue management
+      responses:
+        "200":
+          description: Category list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Category" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+    post:
+      operationId: createAdminCategory
+      tags: [admin]
+      summary: Create a product category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategoryInput" }
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+  /admin/categories/{id}:
+    patch:
+      operationId: updateAdminCategory
+      tags: [admin]
+      summary: Update a category
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategoryUpdate" }
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+        "404":
+          description: Category not found
+  /admin/enquiries:
+    get:
+      operationId: listAdminEnquiries
+      tags: [admin]
+      summary: Search and filter customer enquiries
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: "#/components/schemas/EnquiryStatus" }
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Matching customer enquiries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminEnquiry" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+  /admin/enquiries/{id}:
+    patch:
+      operationId: updateAdminEnquiry
+      tags: [admin]
+      summary: Update an enquiry status or internal note
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnquiryUpdate" }
+      responses:
+        "200":
+          description: Updated enquiry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminEnquiry" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+        "404":
+          description: Enquiry not found
+  /admin/settings:
+    get:
+      operationId: getAdminSettings
+      tags: [admin]
+      summary: Get privacy and enquiry retention settings
+      responses:
+        "200":
+          description: Current privacy settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSettings" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+    patch:
+      operationId: updateAdminSettings
+      tags: [admin]
+      summary: Configure enquiry retention or disable automatic deletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSettingsInput" }
+      responses:
+        "200":
+          description: Updated privacy settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSettings" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
+  /storage/uploads/request-url:
+    post:
+      operationId: requestProductImageUpload
+      tags: [storage]
+      summary: Request a temporary URL to upload a product image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImageUploadInput" }
+      responses:
+        "200":
+          description: Temporary upload URL and public image path
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageUploadResponse" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
 components:
   schemas:
     HealthStatus:
@@ -33,4 +455,275 @@ components:
           type: string
       required:
         - status
+    ProductCondition:
+      type: string
+      enum: [new, used, refurbished]
+    ProductAvailability:
+      type: string
+      enum: [available, quote, out_of_stock]
+    ProductStatus:
+      type: string
+      enum: [draft, published, archived]
+    EnquiryStatus:
+      type: string
+      enum: [new, in_progress, replied, closed]
+    Product:
+      type: object
+      required: [id, slug, title, categoryId, categoryName, condition, description, specifications, imageUrls, availability, status, featured, viewCount, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        brand: { type: ["string", "null"] }
+        model: { type: ["string", "null"] }
+        categoryId: { type: integer }
+        categoryName: { type: string }
+        condition: { $ref: "#/components/schemas/ProductCondition" }
+        description: { type: string }
+        specifications:
+          type: object
+          additionalProperties: { type: string }
+        imageUrls:
+          type: array
+          items: { type: string }
+        priceUgx: { type: ["integer", "null"], minimum: 0 }
+        availability: { $ref: "#/components/schemas/ProductAvailability" }
+        stockQuantity: { type: ["integer", "null"], minimum: 0 }
+        sku: { type: ["string", "null"] }
+        sourceListingUrl: { type: ["string", "null"], format: uri }
+        sourceVerifiedAt: { type: ["string", "null"], format: date }
+        status: { $ref: "#/components/schemas/ProductStatus" }
+        featured: { type: boolean }
+        viewCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ProductPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Product" }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    ProductDetail:
+      type: object
+      required: [product, related]
+      properties:
+        product: { $ref: "#/components/schemas/Product" }
+        related:
+          type: array
+          items: { $ref: "#/components/schemas/Product" }
+    ProductInput:
+      type: object
+      required: [slug, title, categoryId, condition, description, specifications, imageUrls, availability, status, featured]
+      properties:
+        slug: { type: string, minLength: 1, maxLength: 180 }
+        title: { type: string, minLength: 1, maxLength: 220 }
+        brand: { type: ["string", "null"], maxLength: 120 }
+        model: { type: ["string", "null"], maxLength: 120 }
+        categoryId: { type: integer, minimum: 1 }
+        condition: { $ref: "#/components/schemas/ProductCondition" }
+        description: { type: string, maxLength: 10000 }
+        specifications:
+          type: object
+          additionalProperties: { type: string, maxLength: 500 }
+        imageUrls:
+          type: array
+          maxItems: 12
+          items: { type: string, maxLength: 1000 }
+        priceUgx: { type: ["integer", "null"], minimum: 0 }
+        availability: { $ref: "#/components/schemas/ProductAvailability" }
+        stockQuantity: { type: ["integer", "null"], minimum: 0 }
+        sku: { type: ["string", "null"], maxLength: 100 }
+        sourceListingUrl: { type: ["string", "null"], format: uri }
+        sourceVerifiedAt: { type: ["string", "null"], format: date }
+        status: { $ref: "#/components/schemas/ProductStatus" }
+        featured: { type: boolean }
+    ProductUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        slug: { type: string, minLength: 1, maxLength: 180 }
+        title: { type: string, minLength: 1, maxLength: 220 }
+        brand: { type: ["string", "null"], maxLength: 120 }
+        model: { type: ["string", "null"], maxLength: 120 }
+        categoryId: { type: integer, minimum: 1 }
+        condition: { $ref: "#/components/schemas/ProductCondition" }
+        description: { type: string, maxLength: 10000 }
+        specifications:
+          type: object
+          additionalProperties: { type: string, maxLength: 500 }
+        imageUrls:
+          type: array
+          maxItems: 12
+          items: { type: string, maxLength: 1000 }
+        priceUgx: { type: ["integer", "null"], minimum: 0 }
+        availability: { $ref: "#/components/schemas/ProductAvailability" }
+        stockQuantity: { type: ["integer", "null"], minimum: 0 }
+        sku: { type: ["string", "null"], maxLength: 100 }
+        sourceListingUrl: { type: ["string", "null"], format: uri }
+        sourceVerifiedAt: { type: ["string", "null"], format: date }
+        status: { $ref: "#/components/schemas/ProductStatus" }
+        featured: { type: boolean }
+    ProductImportInput:
+      type: object
+      required: [products]
+      properties:
+        products:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { $ref: "#/components/schemas/ProductInput" }
+    ProductImportResult:
+      type: object
+      required: [imported]
+      properties:
+        imported: { type: integer }
+    Category:
+      type: object
+      required: [id, name, slug, description, active, productCount]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        active: { type: boolean }
+        productCount: { type: integer }
+    CategoryInput:
+      type: object
+      required: [name, slug, description, active]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        slug: { type: string, minLength: 1, maxLength: 140 }
+        description: { type: string, maxLength: 500 }
+        active: { type: boolean }
+    CategoryUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        slug: { type: string, minLength: 1, maxLength: 140 }
+        description: { type: string, maxLength: 500 }
+        active: { type: boolean }
+    EnquiryItemInput:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId: { type: integer, minimum: 1 }
+        quantity: { type: integer, minimum: 1, maximum: 100 }
+    EnquiryInput:
+      type: object
+      required: [name, preferredContactMethod, contactValue, items]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        preferredContactMethod:
+          type: string
+          enum: [whatsapp, phone, email]
+        contactValue: { type: string, minLength: 3, maxLength: 254 }
+        organisation: { type: ["string", "null"], maxLength: 180 }
+        locationNotes: { type: ["string", "null"], maxLength: 1000 }
+        message: { type: ["string", "null"], maxLength: 3000 }
+        website: { type: ["string", "null"], maxLength: 300 }
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/EnquiryItemInput" }
+    EnquiryReceipt:
+      type: object
+      required: [id, reference, createdAt]
+      properties:
+        id: { type: integer }
+        reference: { type: string }
+        createdAt: { type: string, format: date-time }
+    AnalyticsEventInput:
+      type: object
+      required: [event]
+      properties:
+        event:
+          type: string
+          enum: [product_view, search]
+        productId: { type: ["integer", "null"], minimum: 1 }
+        query: { type: ["string", "null"], maxLength: 120 }
+    AdminAccess:
+      type: object
+      required: [allowed]
+      properties:
+        allowed: { type: boolean }
+    AdminOverview:
+      type: object
+      required: [productCount, publishedCount, enquiryCount, openEnquiryCount, productViews, searches, recentEnquiries, topProducts]
+      properties:
+        productCount: { type: integer }
+        publishedCount: { type: integer }
+        enquiryCount: { type: integer }
+        openEnquiryCount: { type: integer }
+        productViews: { type: integer }
+        searches: { type: integer }
+        recentEnquiries:
+          type: array
+          items: { $ref: "#/components/schemas/AdminEnquiry" }
+        topProducts:
+          type: array
+          items: { $ref: "#/components/schemas/Product" }
+    AdminSettings:
+      type: object
+      required: [enquiryRetentionDays, updatedAt]
+      properties:
+        enquiryRetentionDays: { type: ["integer", "null"], minimum: 1, maximum: 3650 }
+        updatedAt: { type: string, format: date-time }
+    AdminSettingsInput:
+      type: object
+      required: [enquiryRetentionDays]
+      properties:
+        enquiryRetentionDays: { type: ["integer", "null"], minimum: 1, maximum: 3650 }
+    EnquiryLineItem:
+      type: object
+      required: [productId, title, quantity, priceUgx]
+      properties:
+        productId: { type: integer }
+        title: { type: string }
+        quantity: { type: integer }
+        priceUgx: { type: ["integer", "null"] }
+    AdminEnquiry:
+      type: object
+      required: [id, reference, name, preferredContactMethod, contactValue, organisation, locationNotes, message, status, internalNote, items, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        reference: { type: string }
+        name: { type: string }
+        preferredContactMethod: { type: string, enum: [whatsapp, phone, email] }
+        contactValue: { type: string }
+        organisation: { type: ["string", "null"] }
+        locationNotes: { type: ["string", "null"] }
+        message: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/EnquiryStatus" }
+        internalNote: { type: ["string", "null"] }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/EnquiryLineItem" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EnquiryUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        status: { $ref: "#/components/schemas/EnquiryStatus" }
+        internalNote: { type: ["string", "null"], maxLength: 2000 }
+    ImageUploadInput:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: integer, minimum: 1, maximum: 10485760 }
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+    ImageUploadResponse:
+      type: object
+      required: [uploadURL, imageUrl]
+      properties:
+        uploadURL: { type: string, format: uri }
+        imageUrl: { type: string }
 
