@@ -325,6 +325,12 @@ router.post("/admin/products/import", async (req, res): Promise<void> => {
   }
 
   const products = parsed.data.products;
+  if (products.some((product) => product.status === "published")) {
+    res.status(400).json({
+      error: "CSV imports cannot publish products. Review imported drafts and publish them individually.",
+    });
+    return;
+  }
   if (
     products.some(
       (product) =>

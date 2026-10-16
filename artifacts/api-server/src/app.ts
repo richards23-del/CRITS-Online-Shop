@@ -1,5 +1,9 @@
-import express, { type Express } from "express";
-import cors from "cors";
+import express, {
+  type Express,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
@@ -34,7 +38,6 @@ app.use(
   }),
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
-app.use(cors({ credentials: true, origin: true }));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(
@@ -47,5 +50,21 @@ app.use(
 );
 
 app.use("/api", router);
+
+app.use(
+  (
+    error: unknown,
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): void => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    req.log.error({ err: error }, "Unhandled API request error");
+    res.status(500).json({ error: "An unexpected server error occurred." });
+  },
+);
 
 export default app;

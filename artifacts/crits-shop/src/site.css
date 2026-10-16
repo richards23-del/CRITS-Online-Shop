@@ -92,3 +92,37 @@ button { cursor: pointer; }
 @media (max-width: 380px) {
   .site-width { width: calc(100% - 28px); }.product-grid { grid-template-columns: 1fr; }.product-image { height: 195px; }.utility a { font-size: 8px; }.hero-actions .button { padding-inline: 11px; font-size: 10px; }.hero-bottom { font-size: 7px; }.admin-sidebar nav button { padding-inline: 8px; }
 }
+
+.catalog-controls { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(140px, 1fr)); }
+.catalog-controls .search-box { grid-column: 1 / -1; }
+.filter-input { min-height: 44px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 5px 11px; border: 1px solid #d8e0e5; border-radius: 4px; background: #fff; color: #718294; font-size: 9px; }
+.filter-input input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--ink); background: transparent; font: 10px 'Inter', sans-serif; }
+.filter-input input:focus-visible { outline: 2px solid #1c5eb9; outline-offset: 2px; border-radius: 2px; }
+.catalog-pagination { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 28px 0 8px; color: #607488; font-size: 11px; }
+.honeypot-field { position: absolute !important; left: -10000px !important; top: auto !important; width: 1px !important; height: 1px !important; overflow: hidden !important; }
+.basket-form-link { display: block; margin-top: 10px; color: #dce8f0; text-align: center; text-decoration: underline; font-size: 10px; }
+.enquiry-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(120px, 1fr)); gap: 10px; align-items: end; margin: 0 0 17px; padding: 13px; border: 1px solid #dfe5e8; border-radius: 5px; background: #fff; }
+.enquiry-filters label { display: flex; flex-direction: column; gap: 5px; color: #526a7e; font-size: 9px; font-weight: 600; }
+.enquiry-filters input,.enquiry-filters select { width: 100%; min-height: 37px; padding: 8px 9px; border: 1px solid #dce3e7; border-radius: 4px; color: #30485e; background: #fff; font: 10px 'Inter', sans-serif; }
+.admin-row-actions,.category-row-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.danger-action { color: #a53b2f; }
+.danger-action:hover { border-color: #bf6b61; color: #a53b2f; }
+.admin-source-link { display: block; margin-top: 4px; color: #315e88; font-size: 8px; text-decoration: underline; }
+.category-create-form { grid-template-columns: repeat(3, minmax(120px, 1fr)) auto auto auto; }
+.category-create-form .check-field { flex-direction: row; align-items: center; white-space: nowrap; }
+:where(a,button,input,select,textarea,[tabindex]):focus-visible { outline: 3px solid #1c5eb9; outline-offset: 2px; }
+.skip-link { position: absolute; z-index: 1000; top: -60px; left: 12px; padding: 10px 14px; color: #fff; background: #123f70; border-radius: 3px; font-size: 12px; }
+.skip-link:focus { top: 12px; }
+@media (max-width: 900px) {
+  .catalog-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .enquiry-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .category-create-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .catalog-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-input { min-width: 0; padding-inline: 8px; }
+  .enquiry-filters { grid-template-columns: 1fr 1fr; }
+  .enquiry-filters label:first-child { grid-column: 1 / -1; }
+  .category-row-actions { grid-column: 2 / -1; justify-self: end; }
+  .catalog-pagination { margin-bottom: 35px; }
+}
