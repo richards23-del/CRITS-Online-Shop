@@ -233,6 +233,31 @@ export class ResponseParseError extends Error {
   }
 }
 
+export class UnexpectedContentTypeError extends Error {
+  readonly name = "UnexpectedContentTypeError";
+  readonly status: number;
+  readonly contentType: string | null;
+  readonly method: string;
+  readonly url: string;
+
+  constructor(
+    response: Response,
+    requestInfo: { method: string; url: string },
+  ) {
+    const contentType = getMediaType(response.headers);
+    super(
+      `Expected an API response from ${requestInfo.method} ${response.url || requestInfo.url}, ` +
+        `but received ${contentType ?? "an unknown content type"}. Check that the API server is running and the request is routed to it.`,
+    );
+    Object.setPrototypeOf(this, new.target.prototype);
+
+    this.status = response.status;
+    this.contentType = contentType;
+    this.method = requestInfo.method;
+    this.url = response.url || requestInfo.url;
+  }
+}
+
 async function parseJsonBody(
   response: Response,
   requestInfo: { method: string; url: string },
@@ -297,6 +322,13 @@ async function parseSuccessBody(
 ): Promise<unknown> {
   if (hasNoBody(response, requestInfo.method)) {
     return null;
+  }
+
+  if (
+    responseType === "auto" &&
+    getMediaType(response.headers) === "text/html"
+  ) {
+    throw new UnexpectedContentTypeError(response, requestInfo);
   }
 
   const effectiveType =

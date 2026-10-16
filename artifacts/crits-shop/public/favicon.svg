@@ -1,3 +1,5 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="180" height="180" rx="36" fill="#FF3C00"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CRITS Limited">
+  <rect width="64" height="64" rx="15" fill="#173956" />
+  <path d="M42.5 19.5a18 18 0 1 0 0 25" fill="none" stroke="#f4f7fa" stroke-linecap="round" stroke-width="7.5" />
+  <path d="M40 32h14" fill="none" stroke="#f04412" stroke-linecap="round" stroke-width="7.5" />
 </svg>

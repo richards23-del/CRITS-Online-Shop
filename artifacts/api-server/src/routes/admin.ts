@@ -163,6 +163,15 @@ async function adminEnquiries(
 }
 
 router.get("/admin/authorize", async (req, res): Promise<void> => {
+  if (!process.env.CLERK_PUBLISHABLE_KEY || !process.env.CLERK_SECRET_KEY) {
+    res.status(503).json({ error: "Staff sign-in is not configured." });
+    return;
+  }
+  if (getConfiguredAdminIds().size === 0) {
+    res.status(503).json({ error: "No approved staff accounts are configured." });
+    return;
+  }
+
   const { userId } = getAuth(req);
   if (!userId) {
     res.status(401).json({ error: "Sign-in required" });

@@ -1,106 +1,79 @@
-# CRITS Online Shop — security and operations
+# Security and operations
 
-## Application overview
+## Application and access
 
-- Public storefront: React and Vite web artifact.
-- API: Express routes under `/api`, with request logging through Pino.
-- Data: PostgreSQL tables for categories, products, enquiries, enquiry items, analytics, and privacy settings.
-- Staff sign-in: Replit-managed Clerk. Public catalogue and contact pages do not require sign-in.
-- Product images: Replit Object Storage. Product images are public once their listing is published; only an authenticated staff member on the server allowlist can request an upload URL.
-- Payments are not collected.
+- The React/Vite storefront and Express API can be served from one origin. In production, the API serves the built storefront and Caddy terminates HTTPS in front of it.
+- PostgreSQL stores products, categories, enquiries, enquiry items, analytics, and privacy settings. New installations start without catalogue records.
+- Clerk staff access requires a verified session and an exact Clerk user ID in `CRITS_ADMIN_USER_IDS`. Production startup fails closed when required keys, approved staff IDs, HTTPS origin, trusted proxy count, or writable media storage are missing.
+- Use a Clerk Production instance and `pk_live_...` / `sk_live_...` keys for production. Development users do not transfer to the Production instance; create/invite production staff and allowlist their production user IDs.
+- `CLERK_SECRET_KEY` remains server-side. The matching publishable key is public and is embedded in the Vite storefront as `VITE_CLERK_PUBLISHABLE_KEY`.
+- Clerk session verification restricts authorized parties to `APP_ORIGIN`. Admin write requests also require the configured same origin.
+- Admin IDs must be Clerk user IDs, never email addresses. Restrict sign-up or issue staff invitations through Clerk before launch.
 
-## Staff access
+## Production deployment outside Replit
 
-Admin API access is denied unless the signed-in Clerk user ID appears in the comma-separated `CRITS_ADMIN_USER_IDS` environment variable. An empty value denies all users. Do not put a business email address in this setting; it expects Clerk user IDs.
+The included deployment uses Docker, a managed PostgreSQL service, one API container, a persistent media volume, and Caddy for automatic HTTPS. The API port is private to the Compose network; only Caddy exposes ports 80 and 443.
 
-Before staff can use `/admin`:
+1. Provision a domain, a TLS-enabled managed PostgreSQL database, and an encrypted database backup policy. Point the domain's DNS to the Docker host and allow inbound ports 80 and 443.
+2. Copy `deploy/production.env.example` to `.env.production`. Replace every placeholder; keep this file out of Git. Prefer a deployment secret manager.
+3. Create the Clerk Production instance, configure the domain and allowed sign-in methods, issue/invite the approved staff accounts, and add their production user IDs to the environment file. Development account IDs do not work in Production.
+4. Run `pnpm run preflight:deploy`. It checks required values, Clerk key prefixes and consistency, the database TLS mode, admin ID shape, origin/domain match, proxy count, and absolute media path without printing secret values.
+5. Review migrations under `lib/db/migrations`. The initial migration creates a fresh schema; if the target database already has CRITS tables or data, stop and plan a backed-up schema/data adoption instead. For a clean database, apply the migration once with `docker-compose --env-file .env.production -f compose.production.yaml --profile operations run --rm migrate`.
+6. Deploy with `docker-compose --env-file .env.production -f compose.production.yaml up --build -d`.
+7. Confirm the API health check is ready, sign in with an approved production account, check the storefront and admin workflows, then confirm the backup and media restore procedures.
 
-1. Have the approved staff member register/sign in through the Clerk sign-in flow.
-2. Obtain that account's Clerk user ID through the project's managed Clerk user-management view.
-3. Set `CRITS_ADMIN_USER_IDS` in the Replit environment/secrets flow. Use a comma-separated list for multiple approved staff accounts.
-4. Restart the API workflow and verify that an approved user can access `/admin` and an unlisted account receives an access-denied response.
+The API must stay at one instance while it uses the local media volume. The named `crits_media` volume is durable across container rebuilds but is not an off-host backup. Arrange a separate encrypted, off-host backup for product images and test restoring it. For horizontal scaling, replace filesystem media with shared managed object storage before adding API instances.
 
-Clerk keys and Object Storage configuration are managed by Replit. Keep their values in Replit's secrets flow; do not copy them into source files, this document, or a CSV export.
+`TRUST_PROXY_HOPS` must equal the number of trusted reverse proxies. The included Caddy service is one hop. Do not publish port 8080, trust client-supplied forwarding headers, or expose PostgreSQL publicly. Production requires `sslmode=require`, `verify-ca`, or `verify-full` in the database connection URL.
 
-## Public contact configuration
+`pnpm --filter @workspace/db run push` is for local development only. Review and apply versioned migrations for production; never run a schema push against the live database.
 
-The website uses the supplied CRITS contact details. `VITE_CRITS_WHATSAPP` can override the supplied WhatsApp number at build time. If it is explicitly set to an empty value, WhatsApp links are hidden and the standard enquiry form remains available. If it is unset, the supplied number is used. A new value should be verified with CRITS before publication.
+## Local staff setup
 
-## Enquiries and privacy
+1. Create a Clerk development instance and set `VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_PUBLISHABLE_KEY`, and `CLERK_SECRET_KEY` in `.env.local`.
+2. Restrict development sign-up or invite only designated staff accounts.
+3. Have a staff member sign in and copy that account's Clerk user ID from the Clerk Dashboard.
+4. Add the exact ID to `CRITS_ADMIN_USER_IDS`; separate multiple IDs with commas.
+5. Restart the API and check `/admin`. Verify an unlisted account cannot read staff data or make changes.
 
-- Enquiry submission validates data on the server, checks the selected published products, uses a honeypot, and is limited to five submissions per IP per 15 minutes.
-- Enquiry details are visible only through allowlisted admin routes. Follow-up is manual in the staff workspace; no email/SMS notification service is configured.
-- Retention is unset by default, so the application does not automatically delete enquiry records. A staff member can set a period in **Admin → Privacy settings**.
-- Saving a retention period immediately deletes enquiries older than that period; the page requires an explicit confirmation. A daily sweep also removes records after the configured period. Turning automatic deletion off does not restore previously deleted records.
-- CRITS must approve the privacy notice, choose a retention period consistent with its obligations, and confirm applicable Ugandan privacy requirements before launch.
+Never commit `.env.local` or `.env.production`, add secrets to documentation, or paste a Clerk secret key or database password into chat. Rotate any secret that is accidentally exposed.
 
-## Catalogue and media
+## Contact, enquiries, and privacy
 
-- There are no seeded product records. Only CRITS-approved records should be added.
-- CSV imports create drafts or archived records only; publish each product individually after review.
-- Product source URLs and last-verified dates are stored with the catalogue record.
-- Uploaded product media is public. Do not upload customer documents or private files through the product image workflow.
-- The database backup does not include Object Storage files. Keep separate copies of original product images and verify any Object Storage backup/versioning policy before relying on it.
+- Public contact details are currently in the storefront source. Confirm them with CRITS before launch. `VITE_CRITS_WHATSAPP` can override or hide the WhatsApp links.
+- Enquiry submission is validated by the API, checks selected products against the published catalogue, uses a honeypot, and is rate limited to five submissions per IP in 15 minutes.
+- Enquiry records are available only through allowlisted admin routes. Follow-up is manual; email and SMS notifications are not configured.
+- Retention is unset by default. Staff can configure a period under **Admin → Privacy settings**. Saving a period deletes older enquiries; deletion cannot be reversed by turning retention off.
+- CRITS must approve the privacy notice, retention period, and applicable Ugandan privacy requirements before launch.
 
-## Development and deployment
+## Catalogue and product media
 
-From the repository root:
+- Add only CRITS-approved catalogue records. CSV imports create drafts or archived records; publish each product after review.
+- Product source URLs and verification dates can be stored with records.
+- Uploaded product images are public. Do not upload customer documents or private files through the catalogue workflow.
+- Confirm CRITS has rights to each image and description. The Jiji public page is not an approved export interface; do not scrape or reuse listing content without permission.
+- Back up database and media separately. A database dump does not contain product images.
 
-```sh
-pnpm install
-pnpm --filter @workspace/db run push
-pnpm run typecheck
-```
+## Backups and recovery
 
-The configured API and web workflows are `artifacts/api-server: API Server` and `artifacts/crits-shop: web`. Use the Replit Publish flow to publish the project. Review the production database schema changes shown by Publish before applying them. Configure the staff allowlist before granting access to the admin workspace.
-
-Required platform-managed configuration:
-
-- Clerk: `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, and Clerk proxy configuration.
-- Object Storage: `DEFAULT_OBJECT_STORAGE_BUCKET_ID`, `PRIVATE_OBJECT_DIR`, and `PUBLIC_OBJECT_SEARCH_PATHS`.
-- Session support: `SESSION_SECRET`.
-- Staff access: `CRITS_ADMIN_USER_IDS`.
-- Optional public WhatsApp override: `VITE_CRITS_WHATSAPP`.
-
-The first four groups are supplied through Replit-managed setup/secrets. Do not commit their values.
-
-## Database backup and restore
-
-Run backups in a trusted shell with the correct Replit database connection configured as `DATABASE_URL`. Do not paste or print the connection string.
-
-Create a compressed backup:
+Use a trusted shell connected to the managed database to create a compressed backup:
 
 ```sh
 pg_dump "$DATABASE_URL" --format=custom --file="crits-db-$(date +%F).dump"
-```
-
-Check that a backup can be read:
-
-```sh
 pg_restore --list "crits-db-YYYY-MM-DD.dump"
 ```
 
-Restore only after verifying the target database and retaining a separate current backup. The following can replace existing data in the target:
+Restore only to a verified non-production target first and retain a separate current backup:
 
 ```sh
-pg_restore --clean --if-exists --no-owner --dbname="$DATABASE_URL" "crits-db-YYYY-MM-DD.dump"
+pg_restore --clean --if-exists --no-owner --dbname="$RESTORE_DATABASE_URL" "crits-db-YYYY-MM-DD.dump"
 ```
 
-Test restores against a non-production database first. Database dumps do not contain product images stored in Object Storage.
+The included Docker deployment stores images in the named volume `crits_media`. Back that volume up to encrypted off-host storage. A backup is not verified until both the database and media have been restored and checked in a separate environment.
 
-## Known launch gaps
+## Operational limitations to disclose
 
-- `CRITS_ADMIN_USER_IDS` has no initial staff IDs until CRITS completes staff onboarding.
-- Product catalogue is intentionally empty.
-- Jiji sync/export permission is unconfirmed; there is no Jiji integration.
-- CRITS must confirm the tagline and the CRITS/Candid Services relationship before using those details in new public copy.
-- A full postal address and hours have not been confirmed, so the site does not publish them or show a map.
-- No payment provider, delivery integration, automated enquiry notification, or automated Object Storage backup is configured.
-- Authenticated staff screens could not be verified in a browser session without an allowlisted staff account.
-
-## Verification performed
-
-- Workspace library typecheck and the API/frontend package typechecks.
-- Database schema push to the development database.
-- Public health, catalogue, category, enquiry validation, and unauthenticated admin access checks are verified in the current development environment.
-- Manual staff journeys, product image upload, and CSV import/export require an allowlisted account and product records; do not treat them as verified until tested with CRITS staff.
+- No checkout, payment provider, delivery integration, order fulfillment, or automated enquiry notification is configured.
+- The catalogue must be approved and populated before public launch.
+- A postal address, business hours, and CRITS/Candid Services relationship claims require CRITS confirmation before publication.
+- Manual staff sign-in, admin operations, backup recovery, and real production email delivery need verification with CRITS and the chosen host.

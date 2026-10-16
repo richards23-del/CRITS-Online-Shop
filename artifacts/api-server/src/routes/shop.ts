@@ -149,14 +149,14 @@ router.get("/products", async (req, res): Promise<void> => {
   const where = and(...filters, ...(searchFilter ? [searchFilter] : []));
   const orderBy =
     sort === "price-low"
-      ? [asc(productsTable.priceUgx), asc(productsTable.title)]
+      ? [asc(productsTable.priceUgx), asc(productsTable.title), asc(productsTable.id)]
       : sort === "price-high"
-        ? [desc(productsTable.priceUgx), asc(productsTable.title)]
+        ? [desc(productsTable.priceUgx), asc(productsTable.title), asc(productsTable.id)]
         : sort === "newest"
-          ? [desc(productsTable.createdAt)]
+          ? [desc(productsTable.createdAt), desc(productsTable.id)]
           : sort === "popular"
-            ? [desc(productsTable.viewCount), desc(productsTable.createdAt)]
-            : [desc(productsTable.featured), desc(productsTable.createdAt)];
+            ? [desc(productsTable.viewCount), desc(productsTable.createdAt), desc(productsTable.id)]
+            : [desc(productsTable.featured), desc(productsTable.createdAt), desc(productsTable.id)];
 
   const [{ value: exactTotal }] = await db
     .select({ value: count() })

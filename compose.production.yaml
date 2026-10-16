@@ -1,0 +1,83 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:?Set the Clerk production publishable key}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      PORT: "8080"
+      SERVE_WEB: "true"
+      WEB_DIST_DIR: /app/public
+      MEDIA_DIR: /var/lib/crits/media
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      APP_ORIGIN: https://${DOMAIN:?Set DOMAIN to the public site hostname}
+      DATABASE_URL: ${DATABASE_URL:?Set a TLS-enabled managed PostgreSQL URL}
+      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:?Set Clerk production keys}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:?Set Clerk production keys}
+      CRITS_ADMIN_USER_IDS: ${CRITS_ADMIN_USER_IDS:?Set approved production Clerk user IDs}
+      MEDIA_UPLOAD_SIGNING_KEY: ${MEDIA_UPLOAD_SIGNING_KEY:?Set a random media signing key}
+    expose:
+      - "8080"
+    volumes:
+      - crits_media:/var/lib/crits/media
+    networks:
+      - crits
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid,uid=1000,gid=1000
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:?Set the Clerk production publishable key}
+    profiles:
+      - operations
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set a TLS-enabled managed PostgreSQL URL}
+    networks:
+      - crits
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN to the public site hostname}
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - crits
+
+volumes:
+  crits_media:
+  caddy_data:
+  caddy_config:
+
+networks:
+  crits:

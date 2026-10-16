@@ -3,7 +3,6 @@ import './site.css';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useParams } from 'wouter';
 import { ClerkProvider, SignIn, SignUp, useClerk } from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import {
   getCheckAdminAccessQueryKey, getGetAdminOverviewQueryKey, getListAdminCategoriesQueryKey,
@@ -30,12 +29,8 @@ import NotFound from '@/pages/not-found';
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const base = basePath;
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
-if (!clerkPubKey) throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
+const configuredClerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim();
+const clerkPubKey = configuredClerkKey || undefined;
 const phoneMain = '0200 901 530';
 const whatsapp = import.meta.env.VITE_CRITS_WHATSAPP === undefined
   ? '0788 885 947'
@@ -71,6 +66,12 @@ const saveBasket = (lines: BasketLine[]) => localStorage.setItem('crits-enquiry-
 const money = (amount?: number | null) => amount == null ? 'Request a quote' : `UGX ${amount.toLocaleString('en-UG')}`;
 const human = (text: string) => text.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const slugify = (text: string) => text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+function pageSequence(current: number, total: number): Array<number | 'ellipsis'> {
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
+  if (current <= 4) return [1, 2, 3, 4, 5, 'ellipsis', total];
+  if (current >= total - 3) return [1, 'ellipsis', total - 4, total - 3, total - 2, total - 1, total];
+  return [1, 'ellipsis', current - 1, current, current + 1, 'ellipsis', total];
+}
 function parseCsvDocument(text: string): string[][] {
   const input = text.replace(/^\uFEFF/, '');
   const rows: string[][] = [];
@@ -149,7 +150,8 @@ function Button({ children, onClick, href, variant = 'primary', disabled = false
   return <button type="button" className={classes} onClick={onClick} disabled={disabled} data-testid={testid}>{children}</button>;
 }
 function Brand({ inverse = false }: { inverse?: boolean }) {
-  return <Link href="/" className="brand" aria-label="CRITS Limited home" data-testid="link-home-logo"><img src={`${base}/crits-logo-transparent.png`} alt="CRITS Limited logo" />{inverse && <span className="sr-only">CRITS Limited</span>}</Link>;
+  const logo = inverse ? 'crits-logo-light.png' : 'crits-logo-transparent.png';
+  return <Link href="/" className="brand" aria-label="CRITS Limited home" data-testid="link-home-logo"><img src={`${base}/${logo}`} alt="CRITS Limited logo" /></Link>;
 }
 function Header() {
   const [open, setOpen] = useState(false);
@@ -157,7 +159,7 @@ function Header() {
   useEffect(() => setOpen(false), [path]);
   const nav = <><Link href="/catalog" data-testid="link-catalog">Catalogue</Link><Link href="/services" data-testid="link-services">Services</Link><Link href="/about" data-testid="link-about">About us</Link><Link href="/contact" data-testid="link-contact">Contact</Link></>;
   return <header className="site-header">
-    <div className="utility"><div className="site-width utility-inner"><span>Technology & business IT, thoughtfully sourced.</span><div>{whatsappHref && <a href={whatsappHref} target="_blank" rel="noreferrer" data-testid="link-whatsapp-top"><MessageCircle size={14} /> WhatsApp {whatsapp}</a>}<a href={`mailto:${email}`} data-testid="link-email-top"><Mail size={14} /> {email}</a></div></div></div>
+    <div className="utility"><div className="site-width utility-inner"><span>Quality Redefined: Technology and business IT supply.</span><div>{whatsappHref && <a href={whatsappHref} target="_blank" rel="noreferrer" data-testid="link-whatsapp-top"><MessageCircle size={14} /> WhatsApp {whatsapp}</a>}<a href={`mailto:${email}`} data-testid="link-email-top"><Mail size={14} /> {email}</a></div></div></div>
     <div className="site-width nav-row"><Brand /><nav className="desktop-nav" aria-label="Main navigation">{nav}</nav><div className="nav-actions"><Link href="/basket" className={`basket-link ${path === '/basket' ? 'active' : ''}`} data-testid="link-basket"><ShoppingBasket size={18} /><span>Enquiry basket</span><BasketCount /></Link><Button href="/contact" variant="orange" testid="button-header-quote">Request a quote <ArrowRight size={16} /></Button></div><button aria-label={open ? 'Close menu' : 'Open menu'} className="menu-toggle" onClick={() => setOpen(!open)} data-testid="button-menu"><Menu size={22} /></button></div>
     {open && <nav className="mobile-nav" aria-label="Mobile navigation">{nav}<Link href="/basket">Enquiry basket</Link></nav>}
   </header>;
@@ -172,7 +174,7 @@ function BasketCount() {
   return <span className="count-pill" data-testid="text-basket-count">{count}</span>;
 }
 function Footer() {
-  return <footer className="site-footer"><div className="site-width footer-grid"><div><Brand inverse /><p>CRITS Limited<br />Technology and business IT supply.</p></div><div><h3>Explore</h3><Link href="/catalog">Product catalogue</Link><Link href="/services">Services</Link><Link href="/about">About CRITS</Link><Link href="/privacy">Privacy notice</Link></div><div><h3>Talk to our team</h3>{whatsappHref && <a href={whatsappHref} target="_blank" rel="noreferrer"><MessageCircle size={15} /> WhatsApp {whatsapp}</a>}<a href={`tel:+256${phoneMain.replace(/\D/g, '').slice(1)}`}><Phone size={15} /> {phoneMain}</a><a href="tel:+256414670451"><Phone size={15} /> 0414 670 451</a><a href="tel:+256393243318"><Phone size={15} /> 0393 243 318</a><a href={`mailto:${email}`}><Mail size={15} /> {email}</a><a href={instagramUrl} target="_blank" rel="noreferrer"><Instagram size={15} /> Instagram</a><a href={linkedInUrl} target="_blank" rel="noreferrer"><Linkedin size={15} /> LinkedIn</a></div><div className="footer-note"><span className="eyebrow">CRITS LIMITED</span><p>Questions before you choose? We’ll help you find the right fit.</p><Button href="/contact" variant="outline">Get in touch <ArrowUpRight size={16} /></Button></div></div><div className="site-width copyright"><span>© {new Date().getFullYear()} CRITS Limited</span><span>Product information is confirmed by our team before publication.</span></div></footer>;
+  return <footer className="site-footer"><div className="site-width footer-grid"><div><Brand inverse /><p>CRITS Limited<br />Quality Redefined: Technology and business IT supply.</p></div><div><h3>Explore</h3><Link href="/catalog">Product catalogue</Link><Link href="/services">Services</Link><Link href="/about">About CRITS</Link><Link href="/privacy">Privacy notice</Link><Link href="/admin" data-testid="link-staff-sign-in">Staff sign in <LockKeyhole size={13} /></Link></div><div><h3>Talk to our team</h3>{whatsappHref && <a href={whatsappHref} target="_blank" rel="noreferrer"><MessageCircle size={15} /> WhatsApp {whatsapp}</a>}<a href={`tel:+256${phoneMain.replace(/\D/g, '').slice(1)}`}><Phone size={15} /> {phoneMain}</a><a href="tel:+256414670451"><Phone size={15} /> 0414 670 451</a><a href="tel:+256393243318"><Phone size={15} /> 0393 243 318</a><a href={`mailto:${email}`}><Mail size={15} /> {email}</a><a href={instagramUrl} target="_blank" rel="noreferrer"><Instagram size={15} /> Instagram</a><a href={linkedInUrl} target="_blank" rel="noreferrer"><Linkedin size={15} /> LinkedIn</a></div><div className="footer-note"><span className="eyebrow">CRITS LIMITED</span><p>Questions before you choose? We’ll help you find the right fit.</p><Button href="/contact" variant="outline">Get in touch <ArrowUpRight size={16} /></Button></div></div><div className="site-width copyright"><span>© {new Date().getFullYear()} CRITS Limited</span><span>Product information is confirmed by our team before publication.</span></div></footer>;
 }
 function Shell({ children }: { children: ReactNode }) {
   return <><a href="#main-content" className="skip-link">Skip to main content</a><Header /><main id="main-content">{children}</main><Footer /></>;
@@ -212,6 +214,8 @@ function QueryFailure({ retry }: { retry: () => void }) {
 }
 function ProductCard({ product }: { product: Product }) {
   const [lines, setLines] = useState(getBasket);
+  const [failedImageUrl, setFailedImageUrl] = useState('');
+  const imageUrl = product.imageUrls[0];
   const add = () => {
     const next = lines.some((line) => line.product.id === product.id)
       ? lines.map((line) => line.product.id === product.id ? { ...line, quantity: line.quantity + 1 } : line)
@@ -220,7 +224,7 @@ function ProductCard({ product }: { product: Product }) {
   };
   return <article className="product-card" data-testid={`card-product-${product.id}`}>
     <IconLink href={`/products/${product.slug}`} className="product-image">
-      {product.imageUrls[0] ? <img src={product.imageUrls[0]} alt={product.title} /> : <div className="image-placeholder"><Package size={34} /><span>Product image</span></div>}
+      {imageUrl && imageUrl !== failedImageUrl ? <img src={imageUrl} alt={product.title} loading="lazy" decoding="async" onError={() => setFailedImageUrl(imageUrl)} /> : <div className="image-placeholder"><Package size={34} /><span>Product image</span></div>}
       {product.featured && <span className="featured-tag">Featured</span>}
     </IconLink>
     <div className="product-card-body"><div className="product-meta"><span>{product.categoryName}</span><span>{human(product.condition)}</span></div><IconLink href={`/products/${product.slug}`} className="product-title">{product.title}</IconLink>{(product.brand || product.model) && <p className="product-sub">{[product.brand, product.model].filter(Boolean).join(' · ')}</p>}
@@ -232,7 +236,7 @@ function ProductSkeletons() {
   return <div className="product-grid" aria-label="Loading catalogue">{[1, 2, 3, 4].map((n) => <div className="skeleton-card" key={n}><div className="skeleton-img" /><div className="skeleton-line" /><div className="skeleton-line short" /></div>)}</div>;
 }
 function Home() {
-  usePageMeta('Technology and business IT', 'Browse CRITS Limited’s approved technology listings and send the team a quote enquiry.');
+  usePageMeta('Quality Redefined: Technology and business IT supply', 'Browse CRITS Limited’s approved technology listings and send the team a quote enquiry.');
   const health = useHealthCheck();
   const products = useListProducts({ featured: true, pageSize: 4 });
   const cats = useListCategories();
@@ -253,21 +257,30 @@ function Home() {
   </Shell>;
 }
 function Catalog() {
-  const params = new URLSearchParams(window.location.search);
-  const [query, setQuery] = useState(params.get('q') || '');
-  const [category, setCategory] = useState(params.get('category') || '');
-  const [brand, setBrand] = useState('');
-  const [condition, setCondition] = useState<'' | 'new' | 'used' | 'refurbished'>('');
-  const [availability, setAvailability] = useState<'' | 'available' | 'quote' | 'out_of_stock'>('');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
-  const [sort, setSort] = useState('featured');
-  const [page, setPage] = useState(1);
+  const initialParams = new URLSearchParams(window.location.search);
+  const initialCondition = initialParams.get('condition');
+  const initialAvailability = initialParams.get('availability');
+  const initialSort = initialParams.get('sort');
+  const initialMinPrice = initialParams.get('minPrice') || '';
+  const initialMaxPrice = initialParams.get('maxPrice') || '';
+  const [query, setQuery] = useState(initialParams.get('q') || '');
+  const [category, setCategory] = useState(initialParams.get('category') || '');
+  const [brand, setBrand] = useState(initialParams.get('brand') || '');
+  const [condition, setCondition] = useState<'' | 'new' | 'used' | 'refurbished'>(initialCondition === 'new' || initialCondition === 'used' || initialCondition === 'refurbished' ? initialCondition : '');
+  const [availability, setAvailability] = useState<'' | 'available' | 'quote' | 'out_of_stock'>(initialAvailability === 'available' || initialAvailability === 'quote' || initialAvailability === 'out_of_stock' ? initialAvailability : '');
+  const [minPrice, setMinPrice] = useState(/^\d+$/.test(initialMinPrice) ? initialMinPrice : '');
+  const [maxPrice, setMaxPrice] = useState(/^\d+$/.test(initialMaxPrice) ? initialMaxPrice : '');
+  const [sort, setSort] = useState(initialSort === 'newest' || initialSort === 'popular' || initialSort === 'price-low' || initialSort === 'price-high' ? initialSort : 'featured');
+  const [page, setPage] = useState(() => {
+    const requestedPage = Number(initialParams.get('page'));
+    return Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  });
   const [applied, setApplied] = useState(query);
   const [filterError, setFilterError] = useState('');
+  const lastNavigatedPage = useRef(page);
   usePageMeta('Product catalogue', 'Search and filter approved CRITS Limited products by category, brand, condition, availability and price.');
   const categories = useListCategories();
-  const pageSize = 24;
+  const pageSize = 12;
   const queryParams = useMemo(() => ({
     q: applied || undefined,
     category: category || undefined,
@@ -284,7 +297,70 @@ function Catalog() {
   const record = useRecordAnalyticsEvent();
   useEffect(() => { if (applied.trim()) record.mutate({ data: { event: 'search', query: applied.trim() } }); }, [applied]); // analytics query intentionally records searches
   const pageCount = Math.max(1, Math.ceil((products.data?.total ?? 0) / pageSize));
+  const total = products.data?.total ?? 0;
+  const firstResult = total ? ((page - 1) * pageSize) + 1 : 0;
+  const lastResult = Math.min(page * pageSize, total);
   const hasFilters = Boolean(applied || category || brand || condition || availability || minPrice || maxPrice);
+  useEffect(() => {
+    const nextParams = new URLSearchParams();
+    if (applied) nextParams.set('q', applied);
+    if (category) nextParams.set('category', category);
+    if (brand.trim()) nextParams.set('brand', brand.trim());
+    if (condition) nextParams.set('condition', condition);
+    if (availability) nextParams.set('availability', availability);
+    if (minPrice) nextParams.set('minPrice', minPrice);
+    if (maxPrice) nextParams.set('maxPrice', maxPrice);
+    if (sort !== 'featured') nextParams.set('sort', sort);
+    if (page > 1) nextParams.set('page', String(page));
+    const search = nextParams.toString();
+    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl !== currentUrl) window.history.replaceState(window.history.state, '', nextUrl);
+  }, [applied, category, brand, condition, availability, minPrice, maxPrice, sort, page]);
+  useEffect(() => {
+    const restoreFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const nextQuery = params.get('q') || '';
+      const requestedPage = Number(params.get('page'));
+      const nextCondition = params.get('condition');
+      const nextAvailability = params.get('availability');
+      const nextSort = params.get('sort');
+      setQuery(nextQuery);
+      setApplied(nextQuery);
+      setCategory(params.get('category') || '');
+      setBrand(params.get('brand') || '');
+      setCondition(nextCondition === 'new' || nextCondition === 'used' || nextCondition === 'refurbished' ? nextCondition : '');
+      setAvailability(nextAvailability === 'available' || nextAvailability === 'quote' || nextAvailability === 'out_of_stock' ? nextAvailability : '');
+      const nextMinPrice = params.get('minPrice') || '';
+      const nextMaxPrice = params.get('maxPrice') || '';
+      setMinPrice(/^\d+$/.test(nextMinPrice) ? nextMinPrice : '');
+      setMaxPrice(/^\d+$/.test(nextMaxPrice) ? nextMaxPrice : '');
+      setSort(nextSort === 'newest' || nextSort === 'popular' || nextSort === 'price-low' || nextSort === 'price-high' ? nextSort : 'featured');
+      setPage(Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1);
+      setFilterError('');
+    };
+    window.addEventListener('popstate', restoreFromUrl);
+    return () => window.removeEventListener('popstate', restoreFromUrl);
+  }, []);
+  useEffect(() => {
+    if (products.data && page > pageCount) setPage(pageCount);
+  }, [products.data, page, pageCount]);
+  useEffect(() => {
+    if (products.isFetching || lastNavigatedPage.current === page) return;
+    lastNavigatedPage.current = page;
+    const results = document.getElementById('catalog-listings');
+    results?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    results?.focus({ preventScroll: true });
+  }, [page, products.isFetching]);
+  const navigateToPage = (nextPage: number) => {
+    const boundedPage = Math.max(1, Math.min(pageCount, nextPage));
+    if (boundedPage === page) return;
+    const nextUrl = new URL(window.location.href);
+    if (boundedPage === 1) nextUrl.searchParams.delete('page');
+    else nextUrl.searchParams.set('page', String(boundedPage));
+    window.history.pushState(window.history.state, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+    setPage(boundedPage);
+  };
   const search = (e: FormEvent) => {
     e.preventDefault();
     if (minPrice && maxPrice && Number(minPrice) > Number(maxPrice)) {
@@ -320,14 +396,15 @@ function Catalog() {
       <label className="select-control"><select aria-label="Sort products" value={sort} onChange={(e) => { setSort(e.target.value); setPage(1); }}><option value="featured">Featured first</option><option value="newest">Recently added</option><option value="popular">Most viewed</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select><ChevronDown size={15} /></label>
     </form>
     {filterError && <p className="form-error" role="alert">{filterError}</p>}
-    <div className="result-bar"><span data-testid="text-catalog-results">{products.data ? `${products.data.total} ${products.data.total === 1 ? 'listing' : 'listings'}${products.data.total ? ` · page ${page} of ${pageCount}` : ''}` : 'Catalogue listings'}</span><span>Prices and availability confirmed during enquiry</span></div>
-    {products.isLoading ? <ProductSkeletons /> : products.isError ? <QueryFailure retry={() => products.refetch()} /> : products.data?.items.length ? <><div className="product-grid">{products.data.items.map((p) => <ProductCard key={p.id} product={p} />)}</div>{pageCount > 1 && <nav className="catalog-pagination" aria-label="Catalogue pages"><button className="small-action" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Previous</button><span>Page {page} of {pageCount}</span><button className="small-action" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={page >= pageCount}>Next</button></nav>}</> : <div className="empty-catalog large"><div className="empty-mark"><Search size={27} /></div><div><span className="eyebrow">{hasFilters ? 'NO MATCHES YET' : 'A NEW CATALOGUE'}</span><h3>{hasFilters ? 'No listings matched those filters.' : 'The catalogue is ready for approved listings.'}</h3><p>{hasFilters ? 'Try a different search or clear the filters. Our team can also help you find what you need.' : 'CRITS staff are preparing product listings. Once approved, you’ll be able to explore the catalogue here.'}</p><div className="empty-actions"><Button href="/contact" variant="outline">Ask our team <ArrowRight size={15} /></Button>{hasFilters && <button className="text-button" onClick={clearFilters}>Clear filters <X size={15} /></button>}</div></div></div>}
+    <div className="result-bar"><span data-testid="text-catalog-results">{products.data ? total ? `Showing ${firstResult}–${lastResult} of ${total} ${total === 1 ? 'listing' : 'listings'}` : 'No listings found' : 'Catalogue listings'}</span><span>Prices and availability confirmed during enquiry</span></div>
+    {products.isLoading ? <ProductSkeletons /> : products.isError ? <QueryFailure retry={() => products.refetch()} /> : products.data?.items.length ? <><div className="product-grid" id="catalog-listings" tabIndex={-1}>{products.data.items.map((p) => <ProductCard key={p.id} product={p} />)}</div>{pageCount > 1 && <nav className="catalog-pagination" aria-label="Catalogue pagination"><button type="button" className="pagination-step" onClick={() => navigateToPage(page - 1)} disabled={page <= 1} aria-label="Go to previous page">Previous</button>{pageSequence(page, pageCount).map((item, index) => item === 'ellipsis' ? <span key={`ellipsis-${index}`} className="pagination-ellipsis" aria-hidden="true">…</span> : <button type="button" key={item} className="pagination-number" onClick={() => navigateToPage(item)} aria-label={`Go to page ${item}`} aria-current={page === item ? 'page' : undefined}>{item}</button>)}<button type="button" className="pagination-step" onClick={() => navigateToPage(page + 1)} disabled={page >= pageCount} aria-label="Go to next page">Next</button><span className="pagination-page-status" aria-live="polite">Page {page} of {pageCount}</span></nav>}</> : <div className="empty-catalog large"><div className="empty-mark"><Search size={27} /></div><div><span className="eyebrow">{hasFilters ? 'NO MATCHES YET' : 'A NEW CATALOGUE'}</span><h3>{hasFilters ? 'No listings matched those filters.' : 'The catalogue is ready for approved listings.'}</h3><p>{hasFilters ? 'Try a different search or clear the filters. Our team can also help you find what you need.' : 'CRITS staff are preparing product listings. Once approved, you’ll be able to explore the catalogue here.'}</p><div className="empty-actions"><Button href="/contact" variant="outline">Ask our team <ArrowRight size={15} /></Button>{hasFilters && <button className="text-button" onClick={clearFilters}>Clear filters <X size={15} /></button>}</div></div></div>}
   </div><ContactBand /></Shell>;
 }
 function ProductDetail() {
   const { slug = '' } = useParams<{ slug: string }>();
   const productQuery = useGetProduct(slug);
   const currentProduct = productQuery.data?.product;
+  const [failedImageUrl, setFailedImageUrl] = useState('');
   usePageMeta(
     currentProduct?.title || 'Product details',
     currentProduct?.description || 'View product details and request a quote from CRITS Limited.',
@@ -363,7 +440,7 @@ function ProductDetail() {
     const next = found ? lines.map((line) => line.product.id === p.id ? { ...line, quantity: line.quantity + quantity } : line) : [...lines, { product: p, quantity }];
     saveBasket(next); window.dispatchEvent(new Event('crits-basket-change'));
   };
-  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredProduct).replace(/</g, '\\u003c') }} /><Shell><div className="site-width page-wrap page-enter"><div className="breadcrumb"><Link href="/">Home</Link><span>/</span><Link href="/catalog">Catalogue</Link><span>/</span><span>{p.title}</span></div><div className="detail-layout"><div className="detail-image">{p.imageUrls[0] ? <img src={p.imageUrls[0]} alt={p.title} /> : <div className="image-placeholder"><Package size={48} /><span>Product image</span></div>}</div><div className="detail-copy"><span className="eyebrow">{p.categoryName}</span><h1 data-testid="text-product-title">{p.title}</h1>{(p.brand || p.model) && <p className="detail-model">{[p.brand, p.model].filter(Boolean).join(' / ')}</p>}<div className="detail-price">{money(p.priceUgx)}</div><p className="detail-description">{p.description}</p><div className="detail-badges"><span><BadgeCheck size={15} /> Staff reviewed listing</span><span><Package size={15} /> {human(p.condition)}</span></div><div className="detail-availability">Availability: <b>{human(p.availability)}</b><small>Confirm current availability with our team.</small></div><div className="detail-actions"><div className="quantity-control"><button aria-label="Decrease quantity" onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button><span data-testid="text-product-quantity">{quantity}</span><button aria-label="Increase quantity" onClick={() => setQuantity(Math.min(100, quantity + 1))}>+</button></div><Button onClick={add} variant="orange" testid="button-add-to-basket">Add to enquiry basket <ShoppingBasket size={17} /></Button></div><p className="no-checkout">No payment or checkout here. Send an enquiry and we’ll follow up.</p></div></div>
+  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredProduct).replace(/</g, '\\u003c') }} /><Shell><div className="site-width page-wrap page-enter"><div className="breadcrumb"><Link href="/">Home</Link><span>/</span><Link href="/catalog">Catalogue</Link><span>/</span><span>{p.title}</span></div><div className="detail-layout"><div className="detail-image">{p.imageUrls[0] && p.imageUrls[0] !== failedImageUrl ? <img src={p.imageUrls[0]} alt={p.title} decoding="async" onError={() => setFailedImageUrl(p.imageUrls[0])} /> : <div className="image-placeholder"><Package size={48} /><span>Product image</span></div>}</div><div className="detail-copy"><span className="eyebrow">{p.categoryName}</span><h1 data-testid="text-product-title">{p.title}</h1>{(p.brand || p.model) && <p className="detail-model">{[p.brand, p.model].filter(Boolean).join(' / ')}</p>}<div className="detail-price">{money(p.priceUgx)}</div><p className="detail-description">{p.description}</p><div className="detail-badges"><span><BadgeCheck size={15} /> Staff reviewed listing</span><span><Package size={15} /> {human(p.condition)}</span></div><div className="detail-availability">Availability: <b>{human(p.availability)}</b><small>Confirm current availability with our team.</small></div><div className="detail-actions"><div className="quantity-control"><button aria-label="Decrease quantity" onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button><span data-testid="text-product-quantity">{quantity}</span><button aria-label="Increase quantity" onClick={() => setQuantity(Math.min(100, quantity + 1))}>+</button></div><Button onClick={add} variant="orange" testid="button-add-to-basket">Add to enquiry basket <ShoppingBasket size={17} /></Button></div><p className="no-checkout">No payment or checkout here. Send an enquiry and we’ll follow up.</p></div></div>
     <div className="spec-panel"><div><span className="eyebrow">PRODUCT DETAILS</span><h2>Specifications</h2></div><dl>{Object.entries(p.specifications || {}).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></div>
     {!!productQuery.data.related.length && <section className="section related"><div className="section-top"><div><span className="eyebrow">MORE TO EXPLORE</span><h2>Related listings</h2></div><Button href="/catalog" variant="outline">All products <ArrowRight size={15} /></Button></div><div className="product-grid">{productQuery.data.related.map((x) => <ProductCard key={x.id} product={x} />)}</div></section>}
   </div><ContactBand /></Shell></>;
@@ -490,6 +567,10 @@ function SignInPage() {
 
 function SignUpPage() {
   return <main className="clerk-auth-page"><div className="auth-brand-panel"><Brand inverse /><div className="auth-panel-content"><span className="eyebrow">CRITS LIMITED · STAFF ACCESS</span><h1>Better business<br />starts with <em>clarity.</em></h1><p>Create an account to request access to the CRITS staff workspace. Dashboard permissions are verified separately by CRITS.</p><div className="auth-panel-foot"><ShieldCheck /> Account creation does not grant staff authorization.</div></div></div><section className="clerk-form-area"><Link href="/" className="auth-back"><ArrowLeft size={15} /> Return to CRITS website</Link><SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} forceRedirectUrl={`${basePath}/admin`} /><span className="auth-legal">CRITS Limited · Staff workspace</span></section></main>;
+}
+
+function StaffAuthConfiguration() {
+  return <main className="admin-gate"><div className="admin-gate-card"><Brand /><div className="denied-mark"><LockKeyhole /></div><span className="eyebrow">STAFF SIGN IN</span><h1>Staff access isn’t configured.</h1><p>The public catalogue is available. Add the Clerk development keys and an approved Clerk user ID to the private .env.local file, then restart the app to enable staff sign-in. Keep the secret key server-side.</p><Button href="/" variant="outline">Return to public website <ArrowRight size={16} /></Button></div></main>;
 }
 
 function ClerkQueryClientCacheInvalidator() {
@@ -830,18 +911,18 @@ function Router() {
   return <ErrorBoundary resetKey={location}><Switch>
     <Route path="/" component={Home} /><Route path="/catalog" component={Catalog} /><Route path="/products/:slug" component={ProductDetail} />
     <Route path="/basket" component={Basket} /><Route path="/contact" component={Contact} /><Route path="/about" component={About} /><Route path="/services" component={Services} /><Route path="/privacy" component={Privacy} />
-    <Route path="/sign-in/*?" component={SignInPage} /><Route path="/sign-up/*?" component={SignUpPage} /><Route path="/admin" component={Admin} /><Route component={NotFound} />
+    <Route path="/sign-in/*?" component={clerkPubKey ? SignInPage : StaffAuthConfiguration} /><Route path="/sign-up/*?" component={clerkPubKey ? SignUpPage : StaffAuthConfiguration} /><Route path="/admin" component={Admin} /><Route component={NotFound} />
   </Switch></ErrorBoundary>;
 }
 
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
+  if (!clerkPubKey) return <Router />;
   const stripBase = (path: string) => basePath && path.startsWith(basePath)
     ? path.slice(basePath.length) || '/'
     : path;
   return <ClerkProvider
     publishableKey={clerkPubKey}
-    proxyUrl={clerkProxyUrl}
     appearance={clerkAppearance}
     signInUrl={`${basePath}/sign-in`}
     signUpUrl={`${basePath}/sign-up`}
