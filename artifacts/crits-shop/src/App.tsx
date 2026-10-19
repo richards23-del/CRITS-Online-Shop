@@ -1161,10 +1161,19 @@ function Admin() {
     const a = document.createElement('a'); a.href = url; a.download = 'crits-catalogue.csv'; a.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  const exportPdf = () => {
+  const exportPdf = async () => {
     const records = adminProducts.data || [];
     if (!records.length) return;
     try {
+      const logoResponse = await fetch(base + '/crits-logo-transparent.png');
+      if (!logoResponse.ok) throw new Error('CRITS logo could not be loaded');
+      const logoBlob = await logoResponse.blob();
+      const logoData = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('CRITS logo could not be read'));
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('CRITS logo could not be read'));
+        reader.readAsDataURL(logoBlob);
+      });
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
@@ -1256,19 +1265,30 @@ function Admin() {
         pdf.setPage(page);
         pdf.setFillColor(orange[0], orange[1], orange[2]);
         pdf.rect(0, 0, pageWidth, 3, 'F');
+        pdf.addImage(logoData, 'PNG', margin, 6, 56, 12.2);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(navy[0], navy[1], navy[2]);
+        pdf.text('CANDID REALTORS & IT SOLUTIONS LIMITED', pageWidth - margin, 7.5, { align: 'right' });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.text('0200 901 530  |  0756 501 530  |  0393 243 318', pageWidth - margin, 14, { align: 'right' });
+        pdf.setTextColor(gray[0], gray[1], gray[2]);
+        pdf.text('fairpricesolutions03@gmail.com', pageWidth - margin, 20, { align: 'right' });
+        pdf.setDrawColor(220, 227, 231);
+        pdf.line(margin, 27, pageWidth - margin, 27);
+        pdf.line(margin, pageHeight - 18, pageWidth - margin, pageHeight - 18);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(gray[0], gray[1], gray[2]);
+        pdf.text('Admin export  |  Prepared ' + preparedOn, margin, pageHeight - 11);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(9);
-        pdf.setTextColor(navy[0], navy[1], navy[2]);
-        pdf.text('CRITS LIMITED', margin, 13);
+        pdf.setTextColor(orange[0], orange[1], orange[2]);
+        pdf.text('Quality Redefined', pageWidth / 2, pageHeight - 11, { align: 'center' });
         pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(8);
+        pdf.setFontSize(7.5);
         pdf.setTextColor(gray[0], gray[1], gray[2]);
-        pdf.text('PRODUCT CATALOGUE', pageWidth - margin, 13, { align: 'right' });
-        pdf.setDrawColor(220, 227, 231);
-        pdf.line(margin, 18, pageWidth - margin, 18);
-        pdf.line(margin, pageHeight - 18, pageWidth - margin, pageHeight - 18);
-        pdf.setFontSize(8);
-        pdf.text('Admin export  |  Prepared ' + preparedOn, margin, pageHeight - 11);
         pdf.text('Page ' + page + ' of ' + pageCount, pageWidth - margin, pageHeight - 11, { align: 'right' });
       }
 

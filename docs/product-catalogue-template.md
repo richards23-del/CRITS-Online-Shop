@@ -31,7 +31,7 @@ The example above documents formatting only; it is not a CRITS catalogue record.
 
 ## PDF export
 
-The Admin Products page and Import / export page both provide **Export PDF**. The button generates and downloads a `.pdf` file directly in the browser; no print dialog or pop-up is needed. The PDF includes product descriptions and specifications, and excludes source URLs and customer enquiry details.
+The Admin Products page and Import / export page both provide **Export PDF**. The button downloads a professionally formatted `.pdf` directly in the browser. Each page has the CRITS logo and contact details in the header, with Quality Redefined in the footer. The PDF includes product descriptions and specifications, and excludes source URLs and customer enquiry details.
 
 ## Export
 
