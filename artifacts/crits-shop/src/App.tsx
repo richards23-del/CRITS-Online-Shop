@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useParams } from 'wouter';
 import { ClerkProvider, SignIn, SignUp, useClerk } from '@clerk/react';
 import { shadcn } from '@clerk/themes';
+import { jsPDF } from 'jspdf';
 import {
   getCheckAdminAccessQueryKey, getGetAdminOverviewQueryKey, getListAdminCategoriesQueryKey,
   getGetAdminSettingsQueryKey, getListAdminEnquiriesQueryKey, getListAdminProductsQueryKey,
@@ -1163,28 +1164,119 @@ function Admin() {
   const exportPdf = () => {
     const records = adminProducts.data || [];
     if (!records.length) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      setMessage('Allow pop-ups for this site to export the catalogue as a PDF.');
-      return;
+    try {
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 16;
+      const textWidth = pageWidth - margin * 2;
+      const contentBottom = pageHeight - 24;
+      const navy: [number, number, number] = [36, 72, 100];
+      const orange: [number, number, number] = [216, 91, 50];
+      const gray: [number, number, number] = [105, 121, 134];
+      const ink: [number, number, number] = [43, 56, 67];
+      const preparedOn = new Date().toLocaleDateString('en-UG');
+      let y = 37;
+
+      pdf.setProperties({
+        title: 'CRITS Limited product catalogue',
+        subject: 'Product catalogue export',
+        author: 'CRITS Limited',
+        creator: 'CRITS Online Shop',
+      });
+
+      const nextPage = () => {
+        pdf.addPage();
+        y = 37;
+      };
+      const ensureSpace = (height: number) => {
+        if (y + height > contentBottom) nextPage();
+      };
+      const writeText = (
+        value: string,
+        size: number,
+        style: 'normal' | 'bold',
+        color: [number, number, number],
+        gapAfter = 1.5,
+      ) => {
+        if (!value) return;
+        pdf.setFont('helvetica', style);
+        pdf.setFontSize(size);
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const lines = pdf.splitTextToSize(value, textWidth) as string[];
+        const lineHeight = size * 0.48;
+        for (const line of lines) {
+          ensureSpace(lineHeight);
+          pdf.text(line, margin, y);
+          y += lineHeight;
+        }
+        y += gapAfter;
+      };
+
+      records.forEach((product, index) => {
+        if (index > 0) {
+          ensureSpace(9);
+          pdf.setDrawColor(220, 227, 231);
+          pdf.line(margin, y, pageWidth - margin, y);
+          y += 7;
+        }
+        writeText(product.title || 'Untitled product', 12, 'bold', navy, 1);
+        writeText(money(product.priceUgx) + '  |  ' + human(product.status), 9, 'bold', orange, 2.5);
+
+        const details: Array<[string, string]> = [
+          ['Category', product.categoryName],
+          ['Brand', product.brand || ''],
+          ['Model', product.model || ''],
+          ['SKU', product.sku || ''],
+          ['Condition', human(product.condition)],
+          ['Availability', human(product.availability)],
+          ['Stock quantity', product.stockQuantity == null ? '' : String(product.stockQuantity)],
+          ['Featured', product.featured ? 'Yes' : 'No'],
+        ];
+        for (const [label, value] of details) {
+          if (value) writeText(label + ': ' + value, 9, 'normal', ink, 0.5);
+        }
+
+        y += 1;
+        writeText('Description', 9, 'bold', navy, 1);
+        writeText(product.description || 'No description provided.', 9, 'normal', ink, 2);
+
+        const specifications = Object.entries(product.specifications || {});
+        if (specifications.length) {
+          writeText('Specifications', 9, 'bold', navy, 1);
+          for (const [key, value] of specifications) {
+            writeText(key + ': ' + value, 9, 'normal', ink, 0.5);
+          }
+        }
+        y += 3;
+      });
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFillColor(orange[0], orange[1], orange[2]);
+        pdf.rect(0, 0, pageWidth, 3, 'F');
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.setTextColor(navy[0], navy[1], navy[2]);
+        pdf.text('CRITS LIMITED', margin, 13);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(gray[0], gray[1], gray[2]);
+        pdf.text('PRODUCT CATALOGUE', pageWidth - margin, 13, { align: 'right' });
+        pdf.setDrawColor(220, 227, 231);
+        pdf.line(margin, 18, pageWidth - margin, 18);
+        pdf.line(margin, pageHeight - 18, pageWidth - margin, pageHeight - 18);
+        pdf.setFontSize(8);
+        pdf.text('Admin export  |  Prepared ' + preparedOn, margin, pageHeight - 11);
+        pdf.text('Page ' + page + ' of ' + pageCount, pageWidth - margin, pageHeight - 11, { align: 'right' });
+      }
+
+      pdf.save('crits-product-catalogue-' + new Date().toISOString().slice(0, 10) + '.pdf');
+      setMessage('Catalogue PDF downloaded.');
+    } catch {
+      setMessage('The catalogue PDF could not be generated. Please try again.');
     }
-    printWindow.opener = null;
-    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
-    const products = records.map((product) => {
-      const specifications = Object.entries(product.specifications ?? {}).map(([key, value]) => `<li><b>${escapeHtml(key)}:</b> ${escapeHtml(value)}</li>`).join('');
-      const details = [
-        ['Category', product.categoryName], ['Category ID', product.categoryId], ['Brand', product.brand], ['Model', product.model],
-        ['SKU', product.sku], ['Condition', human(product.condition)], ['Availability', human(product.availability)],
-        ['Stock quantity', product.stockQuantity], ['Status', human(product.status)], ['Featured', product.featured ? 'Yes' : 'No'],
-        ['URL slug', product.slug],
-      ].filter(([, value]) => value !== undefined && value !== null && value !== '');
-      return `<article class="product"><div class="product-heading"><div><h2>${escapeHtml(product.title)}</h2><span>${escapeHtml(money(product.priceUgx))}</span></div><span class="status">${escapeHtml(human(product.status))}</span></div><dl>${details.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl><section><h3>Description</h3><p>${escapeHtml(product.description || 'No description provided.')}</p></section>${specifications ? `<section><h3>Specifications</h3><ul>${specifications}</ul></section>` : ''}</article>`;
-    }).join('');
-    printWindow.document.open();
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>CRITS Product Catalogue</title><style>
-      @page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#243b50;font-size:10pt;margin:0}.report-header{display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:2px solid #d85b32;padding-bottom:12px;margin-bottom:18px}.report-header img{width:145px;max-height:52px;object-fit:contain}.report-header h1{font-size:19pt;margin:0 0 5px}.report-header p,.report-footer{font-size:8pt;color:#6d7d8a;margin:0}.product{border:1px solid #d9e1e5;border-radius:5px;padding:13px 15px;margin:0 0 13px;break-inside:avoid}.product-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid #e8edef;padding-bottom:9px;margin-bottom:8px}.product-heading h2{font-size:13pt;margin:0 0 5px;color:#244864}.product-heading>div>span{font-weight:bold;color:#d85b32}.status{font-size:8pt;text-transform:uppercase;letter-spacing:.06em;color:#53697b;background:#edf2f4;padding:5px 7px;border-radius:12px;white-space:nowrap}.product dl{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin:0}.product dl>div{display:flex;gap:7px;padding:4px 0;border-bottom:1px solid #f0f2f3}.product dt{min-width:85px;color:#738494;font-weight:bold}.product dd{margin:0;overflow-wrap:anywhere}.product section{margin-top:9px}.product h3{font-size:9pt;margin:0 0 4px;color:#304e67}.product p{margin:0;white-space:pre-wrap;line-height:1.45}.product ul{margin:3px 0 0;padding-left:17px;columns:2}.product li{padding:2px 0;break-inside:avoid}.report-footer{border-top:1px solid #e1e6e8;padding-top:8px;margin-top:15px;text-align:center}@media print{.product{break-inside:avoid}a{color:inherit;text-decoration:none}}
-    </style></head><body><header class="report-header"><img src="${escapeHtml(`${window.location.origin}${base}/crits-logo-transparent.png`)}" alt="CRITS Limited"><div><h1>Product Catalogue</h1><p>${records.length} product records · Prepared ${escapeHtml(new Date().toLocaleDateString())}</p></div></header><main>${products}</main><footer class="report-footer">CRITS Limited · Internal catalogue export · Confirm product details before publication or transaction.</footer><script>window.addEventListener('load',()=>window.setTimeout(()=>window.print(),300));window.addEventListener('afterprint',()=>window.close());</script></body></html>`);
-    printWindow.document.close();
   };
   const saveRetentionSettings = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1285,7 +1377,7 @@ function Admin() {
         </form>
         {enquiryFrom && enquiryTo && enquiryFrom > enquiryTo ? <div className="form-error" role="alert">The start date must be on or before the end date.</div> : adminEnquiries.isLoading ? <div className="skeleton-table" /> : adminEnquiries.isError ? <QueryFailure retry={() => adminEnquiries.refetch()} /> : adminEnquiries.data?.length ? <div className="enquiry-admin-list">{adminEnquiries.data.map((e) => <EnquiryAdminCard key={e.id} enquiry={e} onUpdate={(data) => updateEnquiry.mutate({ id: e.id, data }, { onSuccess: () => { setMessage(`Enquiry ${e.reference} updated.`); void refreshAdmin(); }, onError: () => setMessage('Enquiry update failed.') })} pending={updateEnquiry.isPending} />)}</div> : <AdminEmpty icon={MessageCircle} title={enquirySearch || enquiryStatus || enquiryFrom || enquiryTo ? 'No enquiries match these filters' : 'No enquiries received yet'} copy={enquirySearch || enquiryStatus || enquiryFrom || enquiryTo ? 'Try a broader search or remove some filters.' : 'Customer product and contact requests will appear here.'} />}
       </>}
-      {tab === 'data' && <><div className="admin-title-row"><div><span className="eyebrow">CATALOGUE DATA</span><h1>Import & export</h1><p>Move product information in or out of the CRITS catalogue.</p></div></div><div className="data-tools"><section className="data-tool-card"><div className="tool-icon"><Upload /></div><span className="eyebrow">BATCH IMPORT</span><h2>Import product CSV</h2><p>Use the empty template. Include the current category ID, JSON object specifications, and JSON array image URLs. Imports create drafts or archived records for staff review, never published listings.</p><a className="button button-outline" href={`${base}/product-catalogue-template.csv`} download><ArrowDownToLine size={16} /> Download template</a><label className="file-picker"><input type="file" accept=".csv,text/csv" onChange={(e) => void importCsv(e.target.files?.[0])} data-testid="input-import-csv" /><Upload size={16} /> Choose CSV file</label>{importProducts.isPending && <p className="pending-note">Validating and importing…</p>}</section><section className="data-tool-card"><div className="tool-icon"><ArrowDownToLine /></div><span className="eyebrow">BACKUP / REVIEW</span><h2>Export catalogue</h2><p>Download a CSV or open a print-ready PDF. The browser print dialog lets you save the PDF. Source URLs and customer enquiry details are excluded.</p><div className="catalog-export-actions"><Button onClick={exportCsv} variant="outline" disabled={!adminProducts.data?.length}><ArrowDownToLine size={16} /> Download CSV</Button><Button onClick={exportPdf} variant="outline" disabled={!adminProducts.data?.length}><FileText size={16} /> Export PDF</Button></div></section></div><div className="admin-note"><ShieldCheck /><p><b>Keep catalogue details accurate.</b> Only import product information approved by CRITS staff. Imported records remain out of the public catalogue until a staff member publishes them.</p></div></>}
+      {tab === 'data' && <><div className="admin-title-row"><div><span className="eyebrow">CATALOGUE DATA</span><h1>Import & export</h1><p>Move product information in or out of the CRITS catalogue.</p></div></div><div className="data-tools"><section className="data-tool-card"><div className="tool-icon"><Upload /></div><span className="eyebrow">BATCH IMPORT</span><h2>Import product CSV</h2><p>Use the empty template. Include the current category ID, JSON object specifications, and JSON array image URLs. Imports create drafts or archived records for staff review, never published listings.</p><a className="button button-outline" href={`${base}/product-catalogue-template.csv`} download><ArrowDownToLine size={16} /> Download template</a><label className="file-picker"><input type="file" accept=".csv,text/csv" onChange={(e) => void importCsv(e.target.files?.[0])} data-testid="input-import-csv" /><Upload size={16} /> Choose CSV file</label>{importProducts.isPending && <p className="pending-note">Validating and importing…</p>}</section><section className="data-tool-card"><div className="tool-icon"><ArrowDownToLine /></div><span className="eyebrow">BACKUP / REVIEW</span><h2>Export catalogue</h2><p>Download a CSV or PDF directly. The PDF is generated in your browser. Source URLs and customer enquiry details are excluded.</p><div className="catalog-export-actions"><Button onClick={exportCsv} variant="outline" disabled={!adminProducts.data?.length}><ArrowDownToLine size={16} /> Download CSV</Button><Button onClick={exportPdf} variant="outline" disabled={!adminProducts.data?.length}><FileText size={16} /> Export PDF</Button></div></section></div><div className="admin-note"><ShieldCheck /><p><b>Keep catalogue details accurate.</b> Only import product information approved by CRITS staff. Imported records remain out of the public catalogue until a staff member publishes them.</p></div></>}
       {tab === 'settings' && <><div className="admin-title-row"><div><span className="eyebrow">PRIVACY CONTROLS</span><h1>Enquiry retention</h1><p>Configure how long customer enquiry records are retained.</p></div></div>
         {adminSettings.isLoading ? <div className="admin-panel"><div className="skeleton-line" /><div className="skeleton-line short" /></div> : adminSettings.isError ? <QueryFailure retry={() => adminSettings.refetch()} /> : adminSettings.data && <div className="retention-layout"><form className="retention-panel" onSubmit={saveRetentionSettings}>
           <div className="retention-panel-heading"><span className="retention-icon"><LockKeyhole /></span><div><span className="eyebrow">ENQUIRY RECORDS</span><h2>Automatic deletion</h2><p>Choose a retention period for enquiries submitted through the website.</p></div></div>

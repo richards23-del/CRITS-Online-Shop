@@ -31,7 +31,7 @@ The example above documents formatting only; it is not a CRITS catalogue record.
 
 ## PDF export
 
-The Admin Products page and Import / export page both provide **Export PDF**. The button opens a print-ready catalogue in a new window; choose **Save as PDF** in the browser print dialog. Allow pop-ups for the site if the window does not open. The PDF includes product descriptions and specifications, and excludes source URLs and customer enquiry details.
+The Admin Products page and Import / export page both provide **Export PDF**. The button generates and downloads a `.pdf` file directly in the browser; no print dialog or pop-up is needed. The PDF includes product descriptions and specifications, and excludes source URLs and customer enquiry details.
 
 ## Export
 
