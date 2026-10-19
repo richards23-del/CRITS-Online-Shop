@@ -7,18 +7,20 @@ import { shadcn } from '@clerk/themes';
 import {
   getCheckAdminAccessQueryKey, getGetAdminOverviewQueryKey, getListAdminCategoriesQueryKey,
   getGetAdminSettingsQueryKey, getListAdminEnquiriesQueryKey, getListAdminProductsQueryKey,
+  getListAdminPropertiesQueryKey, getListPropertiesQueryKey,
   getListCategoriesQueryKey, getListProductsQueryKey, useCheckAdminAccess, useCreateAdminCategory,
-  useCreateAdminProduct, useCreateEnquiry, useGetAdminOverview, useGetAdminSettings, useGetProduct,
+  useCreateAdminProduct, useCreateAdminProperty, useCreateEnquiry, useGetAdminOverview, useGetAdminSettings, useGetProduct,
   useHealthCheck, useImportAdminProducts, useListAdminCategories, useListAdminEnquiries,
-  useListAdminProducts, useListCategories, useListProducts, useRecordAnalyticsEvent,
+  useListAdminProducts, useListAdminProperties, useListProperties, useListCategories, useListProducts, useRecordAnalyticsEvent,
   useRequestProductImageUpload, useUpdateAdminCategory, useUpdateAdminEnquiry,
-  useUpdateAdminProduct, useUpdateAdminSettings,
+  useRequestPropertyImageUpload,
+  useUpdateAdminProduct, useUpdateAdminProperty, useUpdateAdminSettings,
 } from '@workspace/api-client-react';
-import type { AdminEnquiry, Category, EnquiryInput, Product, ProductInput } from '@workspace/api-client-react';
+import type { AdminEnquiry, Category, EnquiryInput, Product, ProductInput, Property, PropertyInput } from '@workspace/api-client-react';
 import {
-  ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, Boxes, BriefcaseBusiness,
+  ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, Boxes, BriefcaseBusiness, Building2,
   Check, CheckCircle2, ChevronDown, CircleHelp, ClipboardList, Clock3, FileText, Filter, HardDrive,
-  Headset, Instagram, LayoutDashboard, Linkedin, LockKeyhole, Mail, Menu, MessageCircle, Package, Phone, Plus, Search,
+  Headset, Instagram, LayoutDashboard, Linkedin, LockKeyhole, Mail, MapPin, Menu, MessageCircle, Package, Phone, Plus, Search,
   Send, ShieldCheck, ShoppingBasket, SlidersHorizontal, Tag, Upload, Users, X,
 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -32,6 +34,8 @@ const base = basePath;
 const configuredClerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim();
 const clerkPubKey = configuredClerkKey || undefined;
 const phoneMain = '0200 901 530';
+const replacementPhone = '0756 501 530';
+const replacementPhoneHref = 'tel:+256756501530';
 const whatsapp = import.meta.env.VITE_CRITS_WHATSAPP === undefined
   ? '0788 885 947'
   : import.meta.env.VITE_CRITS_WHATSAPP.trim();
@@ -66,12 +70,36 @@ const saveBasket = (lines: BasketLine[]) => localStorage.setItem('crits-enquiry-
 const money = (amount?: number | null) => amount == null ? 'Request a quote' : `UGX ${amount.toLocaleString('en-UG')}`;
 const human = (text: string) => text.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const slugify = (text: string) => text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+function propertyEnquiryHref(property: Pick<Property, 'title' | 'location' | 'landArea' | 'priceUgx'>) {
+  const priceLine = property.priceUgx == null ? '' : ` Please confirm the displayed price of ${money(property.priceUgx)}.`;
+  const message = `Hello CRITS Limited, I’m interested in the ${property.title} opportunity in ${property.location} (${property.landArea}).${priceLine} Please confirm current availability and share further details.`;
+  return `/contact?${new URLSearchParams({ message }).toString()}`;
+}
 function pageSequence(current: number, total: number): Array<number | 'ellipsis'> {
   if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
   if (current <= 4) return [1, 2, 3, 4, 5, 'ellipsis', total];
   if (current >= total - 3) return [1, 'ellipsis', total - 4, total - 3, total - 2, total - 1, total];
   return [1, 'ellipsis', current - 1, current, current + 1, 'ellipsis', total];
 }
+type PropertyDisplay = Pick<Property, 'slug' | 'title' | 'location' | 'landArea' | 'description' | 'imageUrls' | 'priceUgx' | 'featured'> & {
+  id?: number;
+  propertyType?: string;
+  priceBasis?: string;
+};
+
+const nalyaPropertyListing: PropertyDisplay = {
+  slug: 'prime-residential-land-nalya',
+  title: 'Prime residential land in Naalya, 2.89 acres',
+  location: 'Nalyako, Naalya, Nakawa',
+  landArea: '2.89 acres',
+  description: 'Prime 2.89 acre residential land located in Nalyako, Naalya. The public listing preview confirms the location, size and asking price. Contact CRITS for the complete property information and to confirm current availability.',
+  imageUrls: [],
+  priceUgx: 3_000_000_000,
+  featured: true,
+  propertyType: 'Residential land',
+  priceBasis: 'Outright price',
+};
+
 function parseCsvDocument(text: string): string[][] {
   const input = text.replace(/^\uFEFF/, '');
   const rows: string[][] = [];
@@ -157,11 +185,21 @@ function Header() {
   const [open, setOpen] = useState(false);
   const [path] = useLocation();
   useEffect(() => setOpen(false), [path]);
-  const nav = <><Link href="/catalog" data-testid="link-catalog">Catalogue</Link><Link href="/services" data-testid="link-services">Services</Link><Link href="/about" data-testid="link-about">About us</Link><Link href="/contact" data-testid="link-contact">Contact</Link></>;
+  const navItems = [
+    ['/technology', 'Technology', 'link-technology'],
+    ['/catalog', 'Catalogue', 'link-catalog'],
+    ['/real-estate', 'Real estate', 'link-real-estate'],
+    ['/about', 'About us', 'link-about'],
+    ['/contact', 'Contact', 'link-contact'],
+  ] as const;
+  const nav = navItems.map(([href, label, testid]) => {
+    const active = path === href || (href === '/catalog' && path.startsWith('/products/'));
+    return <Link key={href} href={href} className={active ? 'nav-current' : undefined} aria-current={active ? 'page' : undefined} data-testid={testid}>{label}</Link>;
+  });
   return <header className="site-header">
-    <div className="utility"><div className="site-width utility-inner"><span>Quality Redefined: Technology and business IT supply.</span><div>{whatsappHref && <a href={whatsappHref} target="_blank" rel="noreferrer" data-testid="link-whatsapp-top"><MessageCircle size={14} /> WhatsApp {whatsapp}</a>}<a href={`mailto:${email}`} data-testid="link-email-top"><Mail size={14} /> {email}</a></div></div></div>
-    <div className="site-width nav-row"><Brand /><nav className="desktop-nav" aria-label="Main navigation">{nav}</nav><div className="nav-actions"><Link href="/basket" className={`basket-link ${path === '/basket' ? 'active' : ''}`} data-testid="link-basket"><ShoppingBasket size={18} /><span>Enquiry basket</span><BasketCount /></Link><Button href="/contact" variant="orange" testid="button-header-quote">Request a quote <ArrowRight size={16} /></Button></div><button aria-label={open ? 'Close menu' : 'Open menu'} className="menu-toggle" onClick={() => setOpen(!open)} data-testid="button-menu"><Menu size={22} /></button></div>
-    {open && <nav className="mobile-nav" aria-label="Mobile navigation">{nav}<Link href="/basket">Enquiry basket</Link></nav>}
+    <div className="utility"><div className="site-width utility-inner"><span>Quality. Innovation. Reliability.</span><div>{whatsappHref && <a href={whatsappHref} target="_blank" rel="noreferrer" data-testid="link-whatsapp-top"><MessageCircle size={14} /> WhatsApp {whatsapp}</a>}<a href={`mailto:${email}`} data-testid="link-email-top"><Mail size={14} /> {email}</a></div></div></div>
+    <div className="site-width nav-row"><Brand /><nav className="desktop-nav" aria-label="Main navigation">{nav}</nav><div className="nav-actions"><Link href="/basket" aria-current={path === '/basket' ? 'page' : undefined} className={`basket-link ${path === '/basket' ? 'active' : ''}`} data-testid="link-basket"><ShoppingBasket size={18} /><span>Enquiry basket</span><BasketCount /></Link><Button href="/contact" variant="orange" testid="button-header-quote">Request a quote <ArrowRight size={16} /></Button></div><button aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} aria-controls="mobile-navigation" className="menu-toggle" onClick={() => setOpen(!open)} data-testid="button-menu"><Menu size={22} /></button></div>
+    {open && <nav id="mobile-navigation" className="mobile-nav" aria-label="Mobile navigation">{nav}<Link href="/basket" aria-current={path === '/basket' ? 'page' : undefined}>Enquiry basket</Link><Link href="/contact">Request a quote</Link></nav>}
   </header>;
 }
 function BasketCount() {
@@ -174,7 +212,7 @@ function BasketCount() {
   return <span className="count-pill" data-testid="text-basket-count">{count}</span>;
 }
 function Footer() {
-  return <footer className="site-footer"><div className="site-width footer-grid"><div><Brand inverse /><p>CRITS Limited<br />Quality Redefined: Technology and business IT supply.</p></div><div><h3>Explore</h3><Link href="/catalog">Product catalogue</Link><Link href="/services">Services</Link><Link href="/about">About CRITS</Link><Link href="/privacy">Privacy notice</Link><Link href="/admin" data-testid="link-staff-sign-in">Staff sign in <LockKeyhole size={13} /></Link></div><div><h3>Talk to our team</h3>{whatsappHref && <a href={whatsappHref} target="_blank" rel="noreferrer"><MessageCircle size={15} /> WhatsApp {whatsapp}</a>}<a href={`tel:+256${phoneMain.replace(/\D/g, '').slice(1)}`}><Phone size={15} /> {phoneMain}</a><a href="tel:+256414670451"><Phone size={15} /> 0414 670 451</a><a href="tel:+256393243318"><Phone size={15} /> 0393 243 318</a><a href={`mailto:${email}`}><Mail size={15} /> {email}</a><a href={instagramUrl} target="_blank" rel="noreferrer"><Instagram size={15} /> Instagram</a><a href={linkedInUrl} target="_blank" rel="noreferrer"><Linkedin size={15} /> LinkedIn</a></div><div className="footer-note"><span className="eyebrow">CRITS LIMITED</span><p>Questions before you choose? We’ll help you find the right fit.</p><Button href="/contact" variant="outline">Get in touch <ArrowUpRight size={16} /></Button></div></div><div className="site-width copyright"><span>© {new Date().getFullYear()} CRITS Limited</span><span>Product information is confirmed by our team before publication.</span></div></footer>;
+  return <footer className="site-footer"><div className="site-width footer-grid"><div><Brand inverse /><p>CANDID REALTORS &amp; IT SOLUTIONS LIMITED<br />Quality. Innovation. Reliability.</p></div><div><h3>Explore</h3><Link href="/technology">Technology</Link><Link href="/catalog">Product catalogue</Link><Link href="/real-estate">Real estate</Link><Link href="/services">Services</Link><Link href="/about">About CRITS</Link><Link href="/privacy">Privacy notice</Link><Link href="/admin" data-testid="link-staff-sign-in">Staff sign in <LockKeyhole size={13} /></Link></div><div><h3>Talk to our team</h3>{whatsappHref && <a href={whatsappHref} target="_blank" rel="noreferrer"><MessageCircle size={15} /> WhatsApp {whatsapp}</a>}<a href={`tel:+256${phoneMain.replace(/\D/g, '').slice(1)}`}><Phone size={15} /> {phoneMain}</a><a href={replacementPhoneHref}><Phone size={15} /> {replacementPhone}</a><a href="tel:+256393243318"><Phone size={15} /> 0393 243 318</a><a href={`mailto:${email}`}><Mail size={15} /> {email}</a><a href={instagramUrl} target="_blank" rel="noreferrer"><Instagram size={15} /> Instagram</a><a href={linkedInUrl} target="_blank" rel="noreferrer"><Linkedin size={15} /> LinkedIn</a></div><div className="footer-note"><span className="eyebrow">CRITS LIMITED</span><p>Technology and real estate services, shaped around your needs.</p><Button href="/contact" variant="outline">Get in touch <ArrowUpRight size={16} /></Button></div></div><div className="site-width copyright"><span>© {new Date().getFullYear()} CRITS Limited</span><span>Product and property information should be confirmed before a transaction.</span></div></footer>;
 }
 function Shell({ children }: { children: ReactNode }) {
   return <><a href="#main-content" className="skip-link">Skip to main content</a><Header /><main id="main-content">{children}</main><Footer /></>;
@@ -224,7 +262,7 @@ function ProductCard({ product }: { product: Product }) {
   };
   return <article className="product-card" data-testid={`card-product-${product.id}`}>
     <IconLink href={`/products/${product.slug}`} className="product-image">
-      {imageUrl && imageUrl !== failedImageUrl ? <img src={imageUrl} alt={product.title} loading="lazy" decoding="async" onError={() => setFailedImageUrl(imageUrl)} /> : <div className="image-placeholder"><Package size={34} /><span>Product image</span></div>}
+      {imageUrl && imageUrl !== failedImageUrl ? <img src={imageUrl} alt={product.title} loading="lazy" decoding="async" onError={() => setFailedImageUrl(imageUrl)} /> : <div className="image-placeholder" role="img" aria-label={imageUrl ? `${product.title} photo unavailable` : `${product.title} product photo pending`}><Package size={34} /><span>{imageUrl ? 'Photo unavailable' : 'Product photo pending'}</span></div>}
       {product.featured && <span className="featured-tag">Featured</span>}
     </IconLink>
     <div className="product-card-body"><div className="product-meta"><span>{product.categoryName}</span><span>{human(product.condition)}</span></div><IconLink href={`/products/${product.slug}`} className="product-title">{product.title}</IconLink>{(product.brand || product.model) && <p className="product-sub">{[product.brand, product.model].filter(Boolean).join(' · ')}</p>}
@@ -235,7 +273,7 @@ function ProductCard({ product }: { product: Product }) {
 function ProductSkeletons() {
   return <div className="product-grid" aria-label="Loading catalogue">{[1, 2, 3, 4].map((n) => <div className="skeleton-card" key={n}><div className="skeleton-img" /><div className="skeleton-line" /><div className="skeleton-line short" /></div>)}</div>;
 }
-function Home() {
+function TechnologyHome() {
   usePageMeta('Quality Redefined: Technology and business IT supply', 'Browse CRITS Limited’s approved technology listings and send the team a quote enquiry.');
   const health = useHealthCheck();
   const products = useListProducts({ featured: true, pageSize: 4 });
@@ -256,6 +294,243 @@ function Home() {
     <ContactBand /><div className="sr-only" aria-live="polite" data-testid="status-api-health">{health.data?.status ?? ''}</div>
   </Shell>;
 }
+const landServiceRows = [
+  { icon: MapPin, title: 'Land acquisition and disposition', description: 'Marketing, sourcing, purchase and sale facilitation for landowners, buyers and investors.' },
+  { icon: BriefcaseBusiness, title: 'Commercial and industrial property', description: 'Land opportunities for warehouses, factories, logistics centres, business parks and offices.' },
+  { icon: Package, title: 'Agricultural land and agribusiness', description: 'Land for farming, livestock, poultry, fish farming, agricultural processing and productive investment.' },
+  { icon: Users, title: 'Residential development', description: 'Opportunities for homes, apartments, housing estates and planned communities.' },
+  { icon: Building2, title: 'Institutional and major projects', description: 'Property sourcing for infrastructure, education, healthcare, transport and storage projects.' },
+  { icon: Headset, title: 'Property marketing and investment', description: 'Connecting property representatives with prospective buyers, developers and investment partners.' },
+  { icon: ShieldCheck, title: 'Due diligence coordination', description: 'Helping clients organise title, ownership, survey, boundary, access and planning checks with qualified professionals.' },
+];
+
+const landProcess = [
+  ['01', 'Understand the requirement', 'Clarify location, land size, intended use, timing and investment parameters.'],
+  ['02', 'Identify suitable opportunities', 'Source and present properties that fit the brief and available market options.'],
+  ['03', 'Facilitate engagement', 'Support professional communication, information exchange and negotiations between relevant parties.'],
+  ['04', 'Encourage due diligence', 'Coordinate appropriate legal, survey, ownership and planning verification before commitments.'],
+  ['05', 'Support transaction progress', 'Work with the parties and qualified advisers to move agreed transactions forward.'],
+];
+
+function PropertyDetailsDialog({ property, onClose }: { property: PropertyDisplay | null; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const photos = property?.imageUrls.filter(Boolean) ?? [];
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (property && !dialog.open) {
+      setActivePhotoIndex(0);
+      dialog.showModal();
+    } else if (!property && dialog.open) {
+      dialog.close();
+    }
+  }, [property]);
+
+  if (!property) return null;
+  const detailRows = [
+    { label: 'Property type', value: property.propertyType ?? 'Land opportunity' },
+    { label: 'Location', value: property.location },
+    { label: 'Land area', value: property.landArea },
+    { label: 'Asking price', value: money(property.priceUgx) },
+    ...(property.priceBasis ? [{ label: 'Price basis', value: property.priceBasis }] : []),
+  ];
+
+  return <dialog ref={dialogRef} className="property-details-dialog" aria-labelledby="property-details-title" onCancel={(event) => { event.preventDefault(); onClose(); }} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="property-details-content">
+      <header className="property-details-header"><div><span className="eyebrow">CRITS PROPERTY LISTING</span><h2 id="property-details-title">{property.title}</h2></div><button type="button" className="property-details-close" onClick={onClose} aria-label="Close property details"><X size={19} /></button></header>
+      <div className="property-details-layout">
+        <div className="property-details-gallery">
+          {photos.length ? <>
+            <img className="property-details-main-image" src={photos[Math.min(activePhotoIndex, photos.length - 1)]} alt={`${property.title}, photo ${activePhotoIndex + 1}`} />
+            {photos.length > 1 && <div className="property-details-thumbnails" aria-label="Property photos">{photos.map((photo, index) => <button type="button" key={`${photo}-${index}`} onClick={() => setActivePhotoIndex(index)} aria-label={`Show property photo ${index + 1}`} aria-pressed={activePhotoIndex === index}><img src={photo} alt="" loading="lazy" /></button>)}</div>}
+          </> : <div className="property-details-no-photo"><Building2 size={34} /><b>Request current property photos</b><span>Contact CRITS for recent images and viewing arrangements.</span></div>}
+        </div>
+        <div className="property-details-information">
+          <dl className="property-details-facts">{detailRows.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}<div><dt>Availability</dt><dd>Confirm with CRITS</dd></div></dl>
+          <section className="property-full-description"><h3>Property description</h3><p>{property.description || 'Contact CRITS for the full property description.'}</p></section>
+          <p className="property-verification-note">Before making a decision, request confirmation of current availability, title and tenure, boundaries, access, utilities and any planning conditions.</p>
+          <Link className="button button-primary" href={propertyEnquiryHref(property)}>Enquire about this property <MessageCircle size={16} /></Link>
+        </div>
+      </div>
+    </div>
+  </dialog>;
+}
+
+function LandListingFeature({ property }: { property?: PropertyDisplay }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const listing = property ?? nalyaPropertyListing;
+  const imageUrl = listing.imageUrls[0];
+  const { title, location, landArea } = listing;
+  const price = money(listing.priceUgx);
+  const enquiryHref = propertyEnquiryHref(listing);
+  return <article className="land-listing-card">
+    <figure className={`land-art${imageUrl ? ' has-photo' : ''}`} role="img" aria-label={imageUrl ? `${title} listing photo, ${location}` : `Illustrative land plan for ${location}`}>
+      {imageUrl ? <><img src={imageUrl} alt={`${title}, ${location}`} className="land-listing-photo" /><span className="land-photo-caption">{location} &middot; {landArea}</span></> : <>
+        <div className="land-art-sun" /><span className="land-art-kicker">CRITS LAND DEPARTMENT &middot; ILLUSTRATIVE PLAN</span>
+        <div className="land-art-boundary"><span /><span /><span /><span /></div><div className="land-art-acres">{landArea.split(' ')[0]}<small>{landArea.split(' ').slice(1).join(' ').toUpperCase()}</small></div>
+        <div className="land-art-location"><MapPin size={15} /> {location.toUpperCase()}</div><div className="land-art-caption">LAND FOR<br /><b>RESIDENTIAL<br />DEVELOPMENT</b></div>
+      </>}
+    </figure>
+    <div className="land-listing-copy">
+      <span className="eyebrow">CRITS PROPERTY LISTING</span>
+      <h3>{title}</h3>
+      <p className="land-listing-intro">{listing.description}</p>
+      <div className="land-listing-facts"><div><small>LOCATION</small><strong>{location}</strong></div><div><small>LAND AREA</small><strong>{landArea}</strong></div></div>
+      <div className="land-listing-price"><small>PRICE</small><strong>{price}</strong></div>
+      <p className="land-listing-note">Confirm current availability, price, ownership and documentation with CRITS before making a decision.</p>
+      <div className="land-listing-actions"><Button href={enquiryHref} testid="link-property-enquiry">Enquire about this property <MessageCircle size={16} /></Button><Button variant="outline" onClick={() => setDetailsOpen(true)}>View full details <ArrowRight size={15} /></Button></div>
+    </div>
+    <PropertyDetailsDialog property={detailsOpen ? listing : null} onClose={() => setDetailsOpen(false)} />
+  </article>;
+}
+
+function PropertyCard({ property }: { property: Property }) {
+  const [failedImageUrl, setFailedImageUrl] = useState('');
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const imageUrl = property.imageUrls[0];
+  return <article className="property-card" data-testid={`card-property-${property.id}`}>
+    <div className="property-card-image">
+      {imageUrl && imageUrl !== failedImageUrl
+        ? <img src={imageUrl} alt={`${property.title}, ${property.location}`} loading="lazy" decoding="async" onError={() => setFailedImageUrl(imageUrl)} />
+        : <div className="property-photo-placeholder"><Building2 size={31} /><span>Property photo unavailable</span></div>}
+      {property.featured && <span className="featured-tag">Featured</span>}
+    </div>
+    <div className="property-card-body"><span className="eyebrow">{property.landArea}</span><h3>{property.title}</h3><p className="property-card-location"><MapPin size={14} /> {property.location}</p>
+      {property.description && <p className="property-card-description">{property.description}</p>}
+      <div className="property-card-footer"><strong>{money(property.priceUgx)}</strong><Button variant="outline" onClick={() => setDetailsOpen(true)}>Full details <ArrowRight size={14} /></Button></div>
+      <Link className="property-card-enquire" href={propertyEnquiryHref(property)}>Enquire about this property <MessageCircle size={14} /></Link>
+    </div>
+    <PropertyDetailsDialog property={detailsOpen ? property : null} onClose={() => setDetailsOpen(false)} />
+  </article>;
+}
+
+function Home() {
+  usePageMeta('CRITS Limited | Technology and Real Estate', 'CANDID REALTORS & IT SOLUTIONS LIMITED brings business technology and strategic real estate services together.');
+  const properties = useListProperties({ page: 1, pageSize: 12 });
+  const spotlight = properties.data?.items.find((property) => property.featured) ?? properties.data?.items[0] ?? nalyaPropertyListing;
+  return <Shell>
+    <section className="company-hero">
+      <div className="company-hero-grid site-width">
+        <div className="company-hero-copy page-enter">
+          <span className="company-eyebrow"><span /> CANDID REALTORS &amp; IT SOLUTIONS LIMITED</span>
+          <h1>Technology for business.<br /><em>Land for what comes next.</em></h1>
+          <p>CRITS Limited brings practical technology supply and strategic real estate facilitation together, helping people, organisations and investors move forward with clarity.</p>
+          <div className="company-hero-actions"><Button href="/technology" variant="orange">Explore technology <ArrowRight size={16} /></Button><Button href="/real-estate" variant="outline">Discover real estate <ArrowUpRight size={16} /></Button></div>
+          <div className="company-values"><span>Quality</span><i /><span>Innovation</span><i /><span>Reliability</span></div>
+        </div>
+        <div className="company-hero-art" aria-hidden="true">
+          <div className="company-art-sun" /><div className="company-art-orbit orbit-a" /><div className="company-art-orbit orbit-b" />
+          <div className="company-art-building"><span /><span /><span /><span /><span /><span /><span /><span /><span /></div>
+          <div className="company-art-land"><i /><i /><i /></div>
+          <div className="company-art-chip chip-tech"><HardDrive size={18} /><span>Business technology</span></div>
+          <div className="company-art-chip chip-land"><MapPin size={18} /><span>Strategic land</span></div>
+          <div className="company-art-signature">CRITS <small>LIMITED</small></div>
+        </div>
+      </div>
+      <div className="company-hero-foot site-width"><span>CANDID REALTORS &amp; IT SOLUTIONS LIMITED</span><span>UGANDA <i /> TECHNOLOGY <i /> REAL ESTATE</span></div>
+    </section>
+
+    <section className="company-intro site-width">
+      <div><span className="eyebrow">ONE COMPANY · TWO DIVISIONS</span><h2>Built around the<br /><em>next opportunity.</em></h2></div>
+      <p>We work across business technology and property, connecting clients with useful products, relevant land opportunities and professional support. Every conversation starts with understanding what you need.</p>
+    </section>
+
+    <section className="company-divisions-section">
+      <div className="site-width"><div className="company-section-heading"><span className="eyebrow">WHAT WE DO</span><h2>Two ways we help you move forward.</h2></div>
+        <div className="company-division-grid">
+          <article className="company-division-card division-tech"><div className="division-icon"><HardDrive size={23} /></div><span className="eyebrow">01 · TECHNOLOGY</span><h3>Business IT, made clearer.</h3><p>Explore technology products for business and get support finding a setup that fits the way you work.</p><div className="division-link-row"><Link href="/catalog">Browse the catalogue <ArrowRight size={16} /></Link><Link href="/services">IT services <ArrowUpRight size={16} /></Link></div></article>
+          <article className="company-division-card division-property"><div className="division-icon"><MapPin size={23} /></div><span className="eyebrow">02 · REAL ESTATE</span><h3>Strategic land. Informed investment.</h3><p>We connect landowners, buyers, developers and institutions with property opportunities across Uganda.</p><div className="division-link-row"><Link href="/real-estate">Explore CRITS Land Department <ArrowRight size={16} /></Link></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section className="company-listing-section site-width"><div className="company-section-heading"><span className="eyebrow">PROPERTY SPOTLIGHT</span><h2>{spotlight?.title ?? 'A Naalya opportunity.'}</h2><p>Review the property details and send an enquiry directly to CRITS.</p></div><LandListingFeature property={spotlight} /></section>
+
+    <section className="company-approach"><div className="site-width company-approach-inner"><div><span className="eyebrow">HOW WE WORK</span><h2>Good decisions start<br />with a clear brief.</h2></div><div className="company-approach-copy"><p>Whether the need is technology or land, we listen first, share relevant options and help clients take informed next steps.</p><Link href="/about">Get to know CRITS <ArrowRight size={16} /></Link></div></div></section>
+    <section className="company-contact-cta site-width"><div><span className="eyebrow">LET’S TALK</span><h2>Tell us what you’re working toward.</h2><p>Discuss a technology requirement, a land opportunity or a business enquiry with our team.</p></div><div className="company-cta-actions"><Button href="/contact" variant="orange">Contact CRITS <ArrowRight size={16} /></Button><a href={replacementPhoneHref}><Phone size={15} /> {replacementPhone}</a></div></section>
+  </Shell>;
+}
+
+function RealEstatePage() {
+  usePageMeta('CRITS Land Department', 'Strategic real estate and land investment solutions from CRITS Limited in Uganda.');
+  const propertyPageSize = 6;
+  const initialPropertyPage = Number(new URLSearchParams(window.location.search).get('page'));
+  const [propertyPage, setPropertyPage] = useState(() => Number.isSafeInteger(initialPropertyPage) && initialPropertyPage > 0 ? initialPropertyPage : 1);
+  const properties = useListProperties({ page: propertyPage, pageSize: propertyPageSize });
+  const propertyTotal = properties.data?.total ?? 0;
+  const usingNalyaFallback = !properties.isLoading && propertyTotal === 0;
+  const displayedPropertyTotal = propertyTotal || (usingNalyaFallback ? 1 : 0);
+  const propertyPageCount = Math.max(1, Math.ceil(propertyTotal / propertyPageSize));
+  const propertyItems = properties.data?.items ?? [];
+  const spotlight = propertyPage === 1 ? propertyItems.find((property) => property.featured) ?? propertyItems[0] ?? (usingNalyaFallback ? nalyaPropertyListing : undefined) : undefined;
+  const additionalProperties = spotlight ? propertyItems.filter((property) => property.id !== spotlight.id) : propertyItems;
+  const firstProperty = displayedPropertyTotal ? ((propertyPage - 1) * propertyPageSize) + 1 : 0;
+  const lastProperty = Math.min(propertyPage * propertyPageSize, displayedPropertyTotal);
+  const lastNavigatedPropertyPage = useRef(propertyPage);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (propertyPage > 1) params.set('page', String(propertyPage));
+    else params.delete('page');
+    const search = params.toString();
+    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl !== currentUrl) window.history.replaceState(window.history.state, '', nextUrl);
+  }, [propertyPage]);
+  useEffect(() => {
+    const restorePageFromUrl = () => {
+      const requested = Number(new URLSearchParams(window.location.search).get('page'));
+      setPropertyPage(Number.isSafeInteger(requested) && requested > 0 ? requested : 1);
+    };
+    window.addEventListener('popstate', restorePageFromUrl);
+    return () => window.removeEventListener('popstate', restorePageFromUrl);
+  }, []);
+  useEffect(() => {
+    if (propertyPage > propertyPageCount) setPropertyPage(propertyPageCount);
+  }, [propertyPage, propertyPageCount]);
+  useEffect(() => {
+    if (properties.isFetching || lastNavigatedPropertyPage.current === propertyPage) return;
+    lastNavigatedPropertyPage.current = propertyPage;
+    const results = document.getElementById('property-results');
+    results?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    results?.focus({ preventScroll: true });
+  }, [propertyPage, properties.isFetching]);
+  const navigateToPropertyPage = (nextPage: number) => {
+    const boundedPage = Math.max(1, Math.min(propertyPageCount, nextPage));
+    if (boundedPage === propertyPage) return;
+    const nextUrl = new URL(window.location.href);
+    if (boundedPage === 1) nextUrl.searchParams.delete('page');
+    else nextUrl.searchParams.set('page', String(boundedPage));
+    window.history.pushState(window.history.state, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+    setPropertyPage(boundedPage);
+  };
+  return <Shell>
+    <section className="estate-hero"><div className="site-width estate-hero-grid">
+      <div className="estate-hero-copy page-enter"><div className="estate-kicker"><MapPin size={15} /> CANDID REALTORS &amp; IT SOLUTIONS LIMITED</div><span className="eyebrow">CRITS LAND DEPARTMENT</span><h1>Strategic land.<br /><em>Informed investment.</em></h1><p>Professional real estate services that connect landowners, investors, developers, institutions and businesses with opportunities across Uganda.</p><div className="company-hero-actions"><a className="button button-orange" href="#property-results">Browse property listings <ArrowRight size={16} /></a><a className="button button-outline" href={replacementPhoneHref}>Call {replacementPhone} <Phone size={15} /></a></div></div>
+      <div className="estate-hero-visual" aria-hidden="true"><div className="estate-map-lines" /><div className="estate-parcel parcel-one" /><div className="estate-parcel parcel-two" /><div className="estate-parcel parcel-three" /><div className="estate-map-pin"><MapPin size={25} /><span>UGANDA</span></div><div className="estate-map-caption">LOCATION<br /><b>MEETS POTENTIAL</b></div></div>
+    </div></section>
+    <section className="estate-overview site-width"><div><span className="eyebrow">ABOUT THE DEPARTMENT</span><h2>Connecting land and opportunity.</h2></div><div><p>CRITS Land Department is the real estate and land investment division of CANDID REALTORS &amp; IT SOLUTIONS LIMITED. We facilitate strategic property transactions and help unlock the value of land through professional services, solutions for investors and trusted business relationships.</p><p>Our work spans land ownership, property investment and development, supporting informed decisions for residential, commercial, industrial and agricultural needs.</p></div></section>
+    <section className="estate-services"><div className="site-width"><div className="company-section-heading"><span className="eyebrow">OUR CORE AREAS</span><h2>Real estate support from first brief to next step.</h2><p>We consider location, size, access, intended use, documentation and each client’s requirements.</p></div><div className="estate-service-grid">{landServiceRows.map(({ icon: Icon, title, description }, index) => <article className="estate-service-card" key={title}><span className="estate-service-number">0{index + 1}</span><Icon size={22} /><h3>{title}</h3><p>{description}</p></article>)}</div></div></section>
+    <section className="estate-focus site-width"><div className="estate-focus-copy"><span className="eyebrow">OUR MARKET FOCUS</span><h2>Opportunities across Uganda.</h2><p>We focus on Kampala and surrounding growth corridors, together with selected regional locations for agricultural production, commercial expansion, industrial activity and planned development.</p></div><div className="estate-audience-grid"><div><Users /><b>Landowners</b><span>Seeking credible market access.</span></div><div><BriefcaseBusiness /><b>Investors and companies</b><span>Planning strategic or operational growth.</span></div><div><Building2 /><b>Developers and institutions</b><span>Seeking land for residential developments and major projects.</span></div><div><Package /><b>Agricultural partners</b><span>Exploring productive land and agribusiness.</span></div></div></section>
+    <section className="estate-process"><div className="site-width"><div className="company-section-heading"><span className="eyebrow">OUR APPROACH</span><h2>Clear steps. Careful decisions.</h2></div><div className="estate-process-grid">{landProcess.map(([number, title, description]) => <article key={number}><span>{number}</span><h3>{title}</h3><p>{description}</p></article>)}</div><p className="estate-professional-note"><ShieldCheck size={18} /> Land transactions require independent verification. Legal, surveying and specialist work should be handled by qualified professionals or competent authorities.</p></div></section>
+    <section className="estate-vision site-width"><article><span className="eyebrow">OUR VISION</span><h2>A trusted land investment partner.</h2><p>To connect valuable land opportunities with responsible investment, productive development and lasting value in Uganda.</p></article><article><span className="eyebrow">OUR MISSION</span><h2>Professional facilitation for informed investment.</h2><p>To connect property owners, investors, developers and institutions through reliable service, informed engagement and integrity.</p></article><article><span className="eyebrow">OUR VALUES</span><h2>Integrity in every engagement.</h2><p>Professionalism, client focus, market awareness, confidentiality and lasting partnerships guide our work.</p></article></section>
+    <section className="company-listing-section site-width property-results-section" id="property-results" tabIndex={-1}>
+      <div className="company-section-heading"><span className="eyebrow">CRITS LAND DEPARTMENT</span><h2>Property opportunities.</h2><p>Browse current listings and contact CRITS directly to confirm availability and arrange more information.</p></div>
+      {properties.isLoading ? <div className="property-grid">{[1, 2, 3].map((item) => <div className="property-card-skeleton" key={item}><div className="skeleton-img" /><div className="skeleton-line" /><div className="skeleton-line short" /></div>)}</div>
+        : properties.isError ? <><LandListingFeature property={nalyaPropertyListing} /><QueryFailure retry={() => properties.refetch()} /></>
+          : propertyItems.length || usingNalyaFallback ? <>
+            {spotlight && <LandListingFeature property={spotlight} />}
+            {!!additionalProperties.length && <div className="property-grid">{additionalProperties.map((property) => <PropertyCard key={property.id} property={property} />)}</div>}
+            <div className="property-result-bar" aria-live="polite"><span>{usingNalyaFallback ? 'One property opportunity is shown. Confirm availability with CRITS.' : `Showing ${firstProperty} to ${lastProperty} of ${propertyTotal} ${propertyTotal === 1 ? 'property' : 'properties'}`}</span><span>Page {propertyPage} of {propertyPageCount}</span></div>
+            {propertyPageCount > 1 && <nav className="catalog-pagination" aria-label="Property listings pagination"><button type="button" className="pagination-step" onClick={() => navigateToPropertyPage(propertyPage - 1)} disabled={propertyPage <= 1} aria-label="Go to previous property page">Previous</button>{pageSequence(propertyPage, propertyPageCount).map((item, index) => item === 'ellipsis' ? <span key={`ellipsis-${index}`} className="pagination-ellipsis" aria-hidden="true">…</span> : <button type="button" key={item} className="pagination-number" onClick={() => navigateToPropertyPage(item)} aria-label={`Go to property page ${item}`} aria-current={propertyPage === item ? 'page' : undefined}>{item}</button>)}<button type="button" className="pagination-step" onClick={() => navigateToPropertyPage(propertyPage + 1)} disabled={propertyPage >= propertyPageCount} aria-label="Go to next property page">Next</button></nav>}
+          </>
+            : <div className="empty-catalog large"><div className="empty-mark"><Building2 size={28} /></div><div><span className="eyebrow">PROPERTY LISTINGS</span><h3>No current public listings.</h3><p>Tell our team what location and property type you’re looking for, and we’ll help you explore suitable opportunities.</p><Button href="/contact" variant="outline">Enquire with CRITS <ArrowRight size={15} /></Button></div></div>}
+    </section>
+    <section className="estate-contact"><div className="site-width estate-contact-inner"><div><span className="eyebrow">PARTNER WITH CRITS LAND DEPARTMENT</span><h2>Let’s discuss your land requirement.</h2><p>Whether you want to acquire land, market a property or explore an investment opportunity, tell us what you’re looking for.</p></div><div><a className="button button-orange" href="/contact">Send an enquiry <ArrowRight size={16} /></a><a className="estate-phone" href={replacementPhoneHref}><Phone size={16} /> {replacementPhone}</a></div></div></section>
+  </Shell>;
+}
+
 function Catalog() {
   const initialParams = new URLSearchParams(window.location.search);
   const initialCondition = initialParams.get('condition');
@@ -396,7 +671,7 @@ function Catalog() {
       <label className="select-control"><select aria-label="Sort products" value={sort} onChange={(e) => { setSort(e.target.value); setPage(1); }}><option value="featured">Featured first</option><option value="newest">Recently added</option><option value="popular">Most viewed</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select><ChevronDown size={15} /></label>
     </form>
     {filterError && <p className="form-error" role="alert">{filterError}</p>}
-    <div className="result-bar"><span data-testid="text-catalog-results">{products.data ? total ? `Showing ${firstResult}–${lastResult} of ${total} ${total === 1 ? 'listing' : 'listings'}` : 'No listings found' : 'Catalogue listings'}</span><span>Prices and availability confirmed during enquiry</span></div>
+    <div className="result-bar"><span data-testid="text-catalog-results">{products.data ? total ? `Showing ${firstResult} to ${lastResult} of ${total} ${total === 1 ? 'listing' : 'listings'}` : 'No listings found' : 'Catalogue listings'}</span><span>Prices and availability confirmed during enquiry</span></div>
     {products.isLoading ? <ProductSkeletons /> : products.isError ? <QueryFailure retry={() => products.refetch()} /> : products.data?.items.length ? <><div className="product-grid" id="catalog-listings" tabIndex={-1}>{products.data.items.map((p) => <ProductCard key={p.id} product={p} />)}</div>{pageCount > 1 && <nav className="catalog-pagination" aria-label="Catalogue pagination"><button type="button" className="pagination-step" onClick={() => navigateToPage(page - 1)} disabled={page <= 1} aria-label="Go to previous page">Previous</button>{pageSequence(page, pageCount).map((item, index) => item === 'ellipsis' ? <span key={`ellipsis-${index}`} className="pagination-ellipsis" aria-hidden="true">…</span> : <button type="button" key={item} className="pagination-number" onClick={() => navigateToPage(item)} aria-label={`Go to page ${item}`} aria-current={page === item ? 'page' : undefined}>{item}</button>)}<button type="button" className="pagination-step" onClick={() => navigateToPage(page + 1)} disabled={page >= pageCount} aria-label="Go to next page">Next</button><span className="pagination-page-status" aria-live="polite">Page {page} of {pageCount}</span></nav>}</> : <div className="empty-catalog large"><div className="empty-mark"><Search size={27} /></div><div><span className="eyebrow">{hasFilters ? 'NO MATCHES YET' : 'A NEW CATALOGUE'}</span><h3>{hasFilters ? 'No listings matched those filters.' : 'The catalogue is ready for approved listings.'}</h3><p>{hasFilters ? 'Try a different search or clear the filters. Our team can also help you find what you need.' : 'CRITS staff are preparing product listings. Once approved, you’ll be able to explore the catalogue here.'}</p><div className="empty-actions"><Button href="/contact" variant="outline">Ask our team <ArrowRight size={15} /></Button>{hasFilters && <button className="text-button" onClick={clearFilters}>Clear filters <X size={15} /></button>}</div></div></div>}
   </div><ContactBand /></Shell>;
 }
@@ -440,12 +715,12 @@ function ProductDetail() {
     const next = found ? lines.map((line) => line.product.id === p.id ? { ...line, quantity: line.quantity + quantity } : line) : [...lines, { product: p, quantity }];
     saveBasket(next); window.dispatchEvent(new Event('crits-basket-change'));
   };
-  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredProduct).replace(/</g, '\\u003c') }} /><Shell><div className="site-width page-wrap page-enter"><div className="breadcrumb"><Link href="/">Home</Link><span>/</span><Link href="/catalog">Catalogue</Link><span>/</span><span>{p.title}</span></div><div className="detail-layout"><div className="detail-image">{p.imageUrls[0] && p.imageUrls[0] !== failedImageUrl ? <img src={p.imageUrls[0]} alt={p.title} decoding="async" onError={() => setFailedImageUrl(p.imageUrls[0])} /> : <div className="image-placeholder"><Package size={48} /><span>Product image</span></div>}</div><div className="detail-copy"><span className="eyebrow">{p.categoryName}</span><h1 data-testid="text-product-title">{p.title}</h1>{(p.brand || p.model) && <p className="detail-model">{[p.brand, p.model].filter(Boolean).join(' / ')}</p>}<div className="detail-price">{money(p.priceUgx)}</div><p className="detail-description">{p.description}</p><div className="detail-badges"><span><BadgeCheck size={15} /> Staff reviewed listing</span><span><Package size={15} /> {human(p.condition)}</span></div><div className="detail-availability">Availability: <b>{human(p.availability)}</b><small>Confirm current availability with our team.</small></div><div className="detail-actions"><div className="quantity-control"><button aria-label="Decrease quantity" onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button><span data-testid="text-product-quantity">{quantity}</span><button aria-label="Increase quantity" onClick={() => setQuantity(Math.min(100, quantity + 1))}>+</button></div><Button onClick={add} variant="orange" testid="button-add-to-basket">Add to enquiry basket <ShoppingBasket size={17} /></Button></div><p className="no-checkout">No payment or checkout here. Send an enquiry and we’ll follow up.</p></div></div>
+  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredProduct).replace(/</g, '\\u003c') }} /><Shell><div className="site-width page-wrap page-enter"><div className="breadcrumb"><Link href="/">Home</Link><span>/</span><Link href="/catalog">Catalogue</Link><span>/</span><span>{p.title}</span></div><div className="detail-layout"><div className="detail-image">{p.imageUrls[0] && p.imageUrls[0] !== failedImageUrl ? <img src={p.imageUrls[0]} alt={p.title} decoding="async" onError={() => setFailedImageUrl(p.imageUrls[0])} /> : <div className="image-placeholder" role="img" aria-label={p.imageUrls[0] ? `${p.title} photo unavailable` : `${p.title} product photo pending`}><Package size={48} /><span>{p.imageUrls[0] ? 'Photo unavailable' : 'Product photo pending'}</span></div>}</div><div className="detail-copy"><span className="eyebrow">{p.categoryName}</span><h1 data-testid="text-product-title">{p.title}</h1>{(p.brand || p.model) && <p className="detail-model">{[p.brand, p.model].filter(Boolean).join(' / ')}</p>}<div className="detail-price">{money(p.priceUgx)}</div><p className="detail-description">{p.description}</p><div className="detail-badges"><span><BadgeCheck size={15} /> Staff reviewed listing</span><span><Package size={15} /> {human(p.condition)}</span></div><div className="detail-availability">Availability: <b>{human(p.availability)}</b><small>Confirm current availability with our team.</small></div><div className="detail-actions"><div className="quantity-control"><button aria-label="Decrease quantity" onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button><span data-testid="text-product-quantity">{quantity}</span><button aria-label="Increase quantity" onClick={() => setQuantity(Math.min(100, quantity + 1))}>+</button></div><Button onClick={add} variant="orange" testid="button-add-to-basket">Add to enquiry basket <ShoppingBasket size={17} /></Button></div><p className="no-checkout">No payment or checkout here. Send an enquiry and we’ll follow up.</p></div></div>
     <div className="spec-panel"><div><span className="eyebrow">PRODUCT DETAILS</span><h2>Specifications</h2></div><dl>{Object.entries(p.specifications || {}).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></div>
     {!!productQuery.data.related.length && <section className="section related"><div className="section-top"><div><span className="eyebrow">MORE TO EXPLORE</span><h2>Related listings</h2></div><Button href="/catalog" variant="outline">All products <ArrowRight size={15} /></Button></div><div className="product-grid">{productQuery.data.related.map((x) => <ProductCard key={x.id} product={x} />)}</div></section>}
   </div><ContactBand /></Shell></>;
 }
-function ContactForm({ initialLines = [] }: { initialLines?: BasketLine[] }) {
+function ContactForm({ initialLines = [], initialMessage = '' }: { initialLines?: BasketLine[]; initialMessage?: string }) {
   const create = useCreateEnquiry();
   const [contactMethod, setContactMethod] = useState<'whatsapp' | 'phone' | 'email'>('whatsapp');
   const [successRef, setSuccessRef] = useState('');
@@ -470,20 +745,21 @@ function ContactForm({ initialLines = [] }: { initialLines?: BasketLine[] }) {
     <div className="form-heading"><span className="eyebrow">SEND AN ENQUIRY</span><h2>Let’s start a conversation.</h2><p>We’ll use your preferred contact method to follow up.</p></div>
     <div className="form-grid"><label className="field">Your name <input name="name" required maxLength={160} placeholder="Name" data-testid="input-enquiry-name" /></label><label className="field">Organisation <span className="optional">Optional</span><input name="organisation" maxLength={180} placeholder="Company or organisation" data-testid="input-enquiry-organisation" /></label>
       <label className="field">Preferred contact method<select value={contactMethod} onChange={(e) => setContactMethod(e.target.value as typeof contactMethod)} data-testid="select-contact-method"><option value="whatsapp">WhatsApp</option><option value="phone">Telephone</option><option value="email">Email</option></select></label><label className="field">Contact detail<input name="contactValue" required minLength={3} maxLength={254} placeholder={contactMethod === 'email' ? 'you@example.com' : 'Your phone number'} data-testid="input-enquiry-contact" /></label>
-      <label className="field full">Location or delivery notes <span className="optional">Optional</span><input name="locationNotes" maxLength={1000} placeholder="Area or any helpful context" data-testid="input-enquiry-location" /></label><label className="field full">How can we help? <span className="optional">Optional</span><textarea name="message" maxLength={3000} rows={4} placeholder="Tell us a little about what you’re looking for." data-testid="input-enquiry-message" /></label></div>
+      <label className="field full">Location or delivery notes <span className="optional">Optional</span><input name="locationNotes" maxLength={1000} placeholder="Area or any helpful context" data-testid="input-enquiry-location" /></label><label className="field full">How can we help? <span className="optional">Optional</span><textarea name="message" maxLength={3000} rows={4} defaultValue={initialMessage} placeholder="Tell us a little about what you’re looking for." data-testid="input-enquiry-message" /></label></div>
     <label className="honeypot-field" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" /></label>
     {errorText && <div className="form-error" role="alert" data-testid="status-enquiry-error">{errorText}</div>}<button className="button button-primary form-submit" type="submit" disabled={create.isPending} data-testid="button-submit-enquiry">{create.isPending ? 'Sending enquiry…' : 'Send enquiry'} {create.isPending ? <span className="tiny-loader" /> : <Send size={16} />}</button><p className="form-privacy">Your information is used to respond to this enquiry. See our <Link href="/privacy">privacy notice</Link>.</p>
   </form>;
 }
 function Contact() {
   usePageMeta('Contact CRITS', 'Contact CRITS Limited by phone, email or WhatsApp, or send an enquiry through the website.');
-  return <Shell><div className="site-width page-wrap page-enter"><div className="breadcrumb"><Link href="/">Home</Link><span>/</span><span>Contact</span></div><div className="contact-layout"><div><PageHeading kicker="WE’RE HERE TO HELP" title="Make your next IT decision with more clarity." copy="Ask about a product, discuss your requirements, or request a quote. Tell us how you’d like us to reach you." /><div className="contact-methods">{whatsappHref && <a href={whatsappHref} target="_blank" rel="noreferrer" className="contact-method" data-testid="link-whatsapp-contact"><span className="contact-icon"><MessageCircle /></span><span><b>WhatsApp</b><small>{whatsapp}</small></span><ArrowUpRight size={17} /></a>}<a href="tel:+256200901530" className="contact-method"><span className="contact-icon"><Phone /></span><span><b>Telephone</b><small>{phoneMain} · 0414 670 451 · 0393 243 318</small></span><ArrowUpRight size={17} /></a><a href={`mailto:${email}`} className="contact-method"><span className="contact-icon"><Mail /></span><span><b>Email</b><small>{email}</small></span><ArrowUpRight size={17} /></a><a href={instagramUrl} target="_blank" rel="noreferrer" className="contact-method"><span className="contact-icon"><Instagram /></span><span><b>Instagram</b><small>@crits_ltd</small></span><ArrowUpRight size={17} /></a><a href={linkedInUrl} target="_blank" rel="noreferrer" className="contact-method"><span className="contact-icon"><Linkedin /></span><span><b>LinkedIn</b><small>CRITS LIMITED</small></span><ArrowUpRight size={17} /></a></div></div><ContactForm /></div></div></Shell>;
+  const initialMessage = new URLSearchParams(window.location.search).get('message') || '';
+  return <Shell><div className="site-width page-wrap page-enter"><div className="breadcrumb"><Link href="/">Home</Link><span>/</span><span>Contact</span></div><div className="contact-layout"><div><PageHeading kicker="WE’RE HERE TO HELP" title="Talk to CRITS Limited." copy="Discuss a technology requirement, a property opportunity, or a general business enquiry. Tell us how you’d like us to reach you." /><div className="contact-methods">{whatsappHref && <a href={whatsappHref} target="_blank" rel="noreferrer" className="contact-method" data-testid="link-whatsapp-contact"><span className="contact-icon"><MessageCircle /></span><span><b>WhatsApp</b><small>{whatsapp}</small></span><ArrowUpRight size={17} /></a>}<a href="tel:+256200901530" className="contact-method"><span className="contact-icon"><Phone /></span><span><b>Telephone</b><small>{phoneMain} · 0756 501 530 · 0393 243 318</small></span><ArrowUpRight size={17} /></a><a href={`mailto:${email}`} className="contact-method"><span className="contact-icon"><Mail /></span><span><b>Email</b><small>{email}</small></span><ArrowUpRight size={17} /></a><a href={instagramUrl} target="_blank" rel="noreferrer" className="contact-method"><span className="contact-icon"><Instagram /></span><span><b>Instagram</b><small>@crits_ltd</small></span><ArrowUpRight size={17} /></a><a href={linkedInUrl} target="_blank" rel="noreferrer" className="contact-method"><span className="contact-icon"><Linkedin /></span><span><b>LinkedIn</b><small>CRITS LIMITED</small></span><ArrowUpRight size={17} /></a></div></div><ContactForm initialMessage={initialMessage} /></div></div></Shell>;
 }
 function Basket() {
   const [lines, setLines] = useState(getBasket);
   usePageMeta('Enquiry basket', 'Review selected products and send CRITS Limited a quote enquiry.');
   const update = (next: BasketLine[]) => { setLines(next); saveBasket(next); window.dispatchEvent(new Event('crits-basket-change')); };
-  const whatsappMessage = `Hello CRITS Limited, please send me a quote for:\n${lines.map(({ product, quantity }) => `• ${product.title} — quantity ${quantity}`).join('\n')}\n\nPlease confirm current price and availability.`;
+  const whatsappMessage = `Hello CRITS Limited, please send me a quote for:\n${lines.map(({ product, quantity }) => `• ${product.title}: quantity ${quantity}`).join('\n')}\n\nPlease confirm current price and availability.`;
   const whatsappBasketLink = whatsappHref
     ? `${whatsappHref}?text=${encodeURIComponent(whatsappMessage)}`
     : '';
@@ -494,7 +770,7 @@ function Basket() {
 }
 function About() {
   usePageMeta('About CRITS', 'Learn how the CRITS Limited catalogue and enquiry service works.');
-  return <Shell><div className="site-width page-wrap page-enter"><div className="breadcrumb"><Link href="/">Home</Link><span>/</span><span>About</span></div><PageHeading kicker="ABOUT CRITS LIMITED" title="Business technology, clearly." copy="A clear, considered way to explore technology and business IT products." /><div className="story-grid"><div className="story-art"><div className="story-corner">CRITS<br /><span>LIMITED</span></div><div className="story-copy-art">Technology<br />for real work.</div><div className="story-rule" /></div><div className="story-text"><span className="eyebrow">THE WAY WE WORK</span><h2>Good decisions start with good information.</h2><p>CRITS Limited brings customers and technology products together through an enquiry-first experience. Explore product information, make a shortlist, and speak with our team about what fits your requirements.</p><p>Product listings are added and reviewed by staff. We don’t publish a product until its details have been approved for the catalogue.</p><Button href="/catalog" variant="outline">Explore the catalogue <ArrowRight size={16} /></Button></div></div><section className="principles"><div><span>01</span><ShieldCheck /><h3>Clear product details</h3><p>Listings show the information approved for sharing, with questions welcomed.</p></div><div><span>02</span><Users /><h3>People in the loop</h3><p>Enquiries go to CRITS staff, not an anonymous checkout flow.</p></div><div><span>03</span><CheckCircle2 /><h3>Reviewed before release</h3><p>The public catalogue begins empty and grows as staff approve listings.</p></div></section></div><ContactBand /></Shell>;
+  return <Shell><div className="site-width page-wrap page-enter"><div className="breadcrumb"><Link href="/">Home</Link><span>/</span><span>About</span></div><PageHeading kicker="ABOUT CRITS LIMITED" title="Business technology, clearly." copy="A clear, considered way to explore technology and business IT products." /><div className="story-grid"><div className="story-art"><div className="story-corner">CRITS<br /><span>LIMITED</span></div><div className="story-copy-art">Technology<br />for real work.</div><div className="story-rule" /></div><div className="story-text"><span className="eyebrow">THE WAY WE WORK</span><h2>Good decisions start with good information.</h2><p>CRITS Limited brings customers and technology products together through an experience that starts with an enquiry. Explore product information, make a shortlist, and speak with our team about what fits your requirements.</p><p>Product listings are added and reviewed by staff. We don’t publish a product until its details have been approved for the catalogue.</p><Button href="/catalog" variant="outline">Explore the catalogue <ArrowRight size={16} /></Button></div></div><section className="principles"><div><span>01</span><ShieldCheck /><h3>Clear product details</h3><p>Listings show the information approved for sharing, with questions welcomed.</p></div><div><span>02</span><Users /><h3>People in the loop</h3><p>Enquiries go to CRITS staff, not an anonymous checkout flow.</p></div><div><span>03</span><CheckCircle2 /><h3>Reviewed before release</h3><p>The public catalogue begins empty and grows as staff approve listings.</p></div></section></div><ContactBand /></Shell>;
 }
 function Services() {
   usePageMeta('Services', 'Explore CRITS Limited’s technology sourcing, IT equipment supply and business IT enquiry services.');
@@ -589,13 +865,21 @@ function ClerkQueryClientCacheInvalidator() {
 }
 function Admin() {
   usePageMeta('Staff workspace', 'Restricted CRITS Limited catalogue and enquiry administration.', undefined, true);
-  const [tab, setTab] = useState<'overview' | 'products' | 'categories' | 'enquiries' | 'data' | 'settings'>('overview');
+  const [tab, setTab] = useState<'overview' | 'products' | 'properties' | 'categories' | 'enquiries' | 'data' | 'settings'>('overview');
   const [productForm, setProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [propertyForm, setPropertyForm] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+  const [prefillNalyaProperty, setPrefillNalyaProperty] = useState(false);
+  const [propertyPage, setPropertyPage] = useState(1);
+  const [propertySearch, setPropertySearch] = useState('');
+  const [appliedPropertySearch, setAppliedPropertySearch] = useState('');
+  const [propertyStatus, setPropertyStatus] = useState<'' | Property['status']>('');
   const [categoryForm, setCategoryForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [message, setMessage] = useState('');
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
+  const [uploadedPropertyUrls, setUploadedPropertyUrls] = useState<string[]>([]);
   const [enquirySearch, setEnquirySearch] = useState('');
   const [enquiryStatus, setEnquiryStatus] = useState<'' | AdminEnquiry['status']>('');
   const [enquiryFrom, setEnquiryFrom] = useState('');
@@ -605,10 +889,24 @@ function Admin() {
   const [retentionConfirmed, setRetentionConfirmed] = useState(false);
   const [settingsInitialized, setSettingsInitialized] = useState(false);
   const queryClient = useQueryClient();
-  const access = useCheckAdminAccess({ query: { queryKey: getCheckAdminAccessQueryKey() } });
+  const access = useCheckAdminAccess({ query: { queryKey: getCheckAdminAccessQueryKey(), retry: false } });
   const allowed = !!access.data?.allowed;
   const overview = useGetAdminOverview({ query: { enabled: allowed, queryKey: getGetAdminOverviewQueryKey() } });
   const adminProducts = useListAdminProducts(undefined, { query: { enabled: allowed, queryKey: getListAdminProductsQueryKey() } });
+  const adminPropertyPageSize = 10;
+  const adminPropertyFilters = useMemo(() => ({
+    q: appliedPropertySearch || undefined,
+    status: propertyStatus || undefined,
+    page: propertyPage,
+    pageSize: adminPropertyPageSize,
+  }), [appliedPropertySearch, propertyStatus, propertyPage]);
+  const adminProperties = useListAdminProperties(adminPropertyFilters, { query: { enabled: allowed, queryKey: getListAdminPropertiesQueryKey(adminPropertyFilters) } });
+  const adminPropertyTotal = adminProperties.data?.total ?? 0;
+  const adminPropertyPageCount = Math.max(1, Math.ceil(adminPropertyTotal / adminPropertyPageSize));
+  const adminPropertyItems = adminProperties.data?.items ?? [];
+  useEffect(() => {
+    if (propertyPage > adminPropertyPageCount) setPropertyPage(adminPropertyPageCount);
+  }, [propertyPage, adminPropertyPageCount]);
   const adminCategories = useListAdminCategories({ query: { enabled: allowed, queryKey: getListAdminCategoriesQueryKey() } });
   const enquiryFilters = useMemo(() => ({
     q: enquirySearch.trim() || undefined,
@@ -620,15 +918,20 @@ function Admin() {
   const adminSettings = useGetAdminSettings({ query: { enabled: allowed, queryKey: getGetAdminSettingsQueryKey() } });
   const createProduct = useCreateAdminProduct();
   const updateProduct = useUpdateAdminProduct();
+  const createProperty = useCreateAdminProperty();
+  const updateProperty = useUpdateAdminProperty();
   const importProducts = useImportAdminProducts();
   const createCategory = useCreateAdminCategory();
   const updateCategory = useUpdateAdminCategory();
   const updateEnquiry = useUpdateAdminEnquiry();
   const updateSettings = useUpdateAdminSettings();
   const uploadImage = useRequestProductImageUpload();
+  const requestPropertyImageUpload = useRequestPropertyImageUpload();
   const refreshAdmin = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: getGetAdminOverviewQueryKey() }),
     queryClient.invalidateQueries({ queryKey: getListAdminProductsQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getListAdminPropertiesQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() }),
     queryClient.invalidateQueries({ queryKey: getListAdminCategoriesQueryKey() }),
     queryClient.invalidateQueries({ queryKey: getListAdminEnquiriesQueryKey() }),
     queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }),
@@ -656,10 +959,12 @@ function Admin() {
       specifications: Object.fromEntries(specEntries.map((r) => [r[0].trim(), r.slice(1).join(':').trim()])), imageUrls: [...uploadedUrls, ...String(form.get('images') || '').split('\n').map((x) => x.trim()).filter(Boolean)].slice(0, 12),
       priceUgx: String(form.get('price') || '').trim() ? Number(form.get('price')) : null, availability: String(form.get('availability')) as ProductInput['availability'],
       stockQuantity: String(form.get('stock') || '').trim() ? Number(form.get('stock')) : null, sku: String(form.get('sku') || '').trim() || null,
-      sourceListingUrl: String(form.get('source') || '').trim() || null,
-      sourceVerifiedAt: String(form.get('sourceVerifiedAt') || '').trim() || null,
       status: String(form.get('status')) as ProductInput['status'], featured: form.get('featured') === 'on',
     };
+    if (input.status === 'published' && input.imageUrls.length === 0) {
+      setMessage('Add a matching product photo before publishing this listing.');
+      return;
+    }
     const onSuccess = () => {
       setProductForm(false);
       setEditingProduct(null);
@@ -667,7 +972,7 @@ function Admin() {
       setMessage(editingProduct ? 'Product updated.' : 'Product saved.');
       void refreshAdmin();
     };
-    const onError = () => setMessage('Product could not be saved. Review the fields, source URL and image URLs, then try again.');
+    const onError = () => setMessage('Product could not be saved. Review the product details and photos, then try again.');
     if (editingProduct) {
       updateProduct.mutate({ id: editingProduct.id, data: input }, { onSuccess, onError });
     } else {
@@ -680,6 +985,13 @@ function Admin() {
     setProductForm(true);
   };
   const changeProductStatus = (product: Product, status: ProductInput['status']) => {
+    if (status === 'published' && product.imageUrls.length === 0) {
+      setEditingProduct(product);
+      setUploadedUrls([]);
+      setProductForm(true);
+      setMessage('Add a matching product photo, then save the listing to publish it.');
+      return;
+    }
     if (status === 'published' && !window.confirm(`Publish “${product.title}” to the public catalogue?`)) return;
     if (status === 'archived' && !window.confirm(`Archive “${product.title}”? It will no longer appear in the public catalogue.`)) return;
     updateProduct.mutate(
@@ -689,6 +1001,66 @@ function Admin() {
         onError: () => setMessage('Unable to update product status.'),
       },
     );
+  };
+  const submitProperty = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const title = String(form.get('title') || '').trim();
+    const imageUrls = [...uploadedPropertyUrls, ...String(form.get('images') || '').split('\n').map((url) => url.trim()).filter(Boolean)].slice(0, 12);
+    const input: PropertyInput = {
+      title,
+      slug: String(form.get('slug') || '').trim() || slugify(title),
+      location: String(form.get('location') || '').trim(),
+      landArea: String(form.get('landArea') || '').trim(),
+      description: String(form.get('description') || '').trim(),
+      imageUrls,
+      priceUgx: String(form.get('price') || '').trim() ? Number(form.get('price')) : null,
+      status: String(form.get('status')) as PropertyInput['status'],
+      featured: form.get('featured') === 'on',
+    };
+    const onSuccess = () => {
+      setPropertyForm(false);
+      setEditingProperty(null);
+      setPrefillNalyaProperty(false);
+      setUploadedPropertyUrls([]);
+      if (!editingProperty) {
+        setPropertyPage(1);
+        setPropertySearch('');
+        setAppliedPropertySearch('');
+        setPropertyStatus('');
+      }
+      setMessage(editingProperty ? 'Real estate listing updated.' : 'Real estate listing saved.');
+      void refreshAdmin();
+    };
+    const onError = () => setMessage('Listing could not be saved. Review the title, location, source link and image URLs. Published listings need a property photo.');
+    if (editingProperty) updateProperty.mutate({ id: editingProperty.id, data: input }, { onSuccess, onError });
+    else createProperty.mutate({ data: input }, { onSuccess, onError });
+  };
+  const editPropertyListing = (property: Property) => {
+    setEditingProperty(property);
+    setPrefillNalyaProperty(false);
+    setUploadedPropertyUrls([]);
+    setPropertyForm(true);
+  };
+  const changePropertyStatus = (property: Property, status: PropertyInput['status']) => {
+    if (status === 'published' && !window.confirm(`Publish "${property.title}" to the public real estate page?`)) return;
+    if (status === 'archived' && !window.confirm(`Archive "${property.title}"? It will no longer appear publicly.`)) return;
+    updateProperty.mutate({ id: property.id, data: { status } }, {
+      onSuccess: () => { setMessage(`Listing ${status === 'archived' ? 'archived' : status === 'draft' ? 'saved as a draft' : 'published'}.`); void refreshAdmin(); },
+      onError: () => setMessage('Unable to update listing status. Confirm it has a photo before publishing.'),
+    });
+  };
+  const uploadPropertyImage = async (file?: File) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setMessage('Image must be 10 MB or smaller.'); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setMessage('Choose a JPG, PNG or WEBP image.'); return; }
+    try {
+      const requested = await requestPropertyImageUpload.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' } });
+      const response = await fetch(requested.uploadURL, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      if (!response.ok) throw new Error('Upload failed');
+      setUploadedPropertyUrls((current) => [...current, requested.imageUrl].slice(0, 12));
+      setMessage('Property photo uploaded and ready to save.');
+    } catch { setMessage('Property photo upload failed. You can add a hosted image URL instead.'); }
   };
   const uploadProductImage = async (file?: File) => {
     if (!file) return;
@@ -740,11 +1112,6 @@ function Admin() {
         if (stockQuantity !== null && (!Number.isSafeInteger(stockQuantity) || stockQuantity < 0)) {
           throw new Error(`Row ${index + 2} has an invalid stock quantity.`);
         }
-        const sourceVerifiedAt = cell('sourceVerifiedAt') || null;
-        const parsedSourceDate = sourceVerifiedAt ? new Date(`${sourceVerifiedAt}T00:00:00.000Z`) : null;
-        if (sourceVerifiedAt && (!/^\d{4}-\d{2}-\d{2}$/.test(sourceVerifiedAt) || Number.isNaN(parsedSourceDate?.getTime()) || parsedSourceDate?.toISOString().slice(0, 10) !== sourceVerifiedAt)) {
-          throw new Error(`Row ${index + 2} needs last-verified dates in YYYY-MM-DD format.`);
-        }
         const featured = cell('featured').toLowerCase();
         if (featured && !['true', 'false'].includes(featured)) {
           throw new Error(`Row ${index + 2} needs featured to be true or false.`);
@@ -767,8 +1134,6 @@ function Admin() {
           availability,
           stockQuantity,
           sku: cell('sku') || null,
-          sourceListingUrl: cell('sourceListingUrl') || null,
-          sourceVerifiedAt,
           status: status === 'archived' ? 'archived' : 'draft',
           featured: featured === 'true',
         };
@@ -782,19 +1147,44 @@ function Admin() {
   };
   const exportCsv = () => {
     const records = adminProducts.data || [];
-    const cols = ['title', 'slug', 'brand', 'model', 'categoryId', 'condition', 'description', 'specifications', 'imageUrls', 'priceUgx', 'availability', 'stockQuantity', 'sku', 'sourceListingUrl', 'sourceVerifiedAt', 'status', 'featured'];
+    const cols = ['title', 'slug', 'brand', 'model', 'categoryId', 'condition', 'description', 'specifications', 'imageUrls', 'priceUgx', 'availability', 'stockQuantity', 'sku', 'status', 'featured'];
     const csv = [cols.map(escapeCsvCell).join(','), ...records.map((product) => {
       const row: Record<string, unknown> = {
         ...product,
         specifications: JSON.stringify(product.specifications ?? {}),
         imageUrls: JSON.stringify(product.imageUrls ?? []),
-        sourceVerifiedAt: product.sourceVerifiedAt ? new Date(product.sourceVerifiedAt).toISOString().slice(0, 10) : '',
       };
       return cols.map((key) => escapeCsvCell(row[key])).join(',');
     })].join('\r\n');
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a'); a.href = url; a.download = 'crits-catalogue.csv'; a.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const exportPdf = () => {
+    const records = adminProducts.data || [];
+    if (!records.length) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      setMessage('Allow pop-ups for this site to export the catalogue as a PDF.');
+      return;
+    }
+    printWindow.opener = null;
+    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
+    const products = records.map((product) => {
+      const specifications = Object.entries(product.specifications ?? {}).map(([key, value]) => `<li><b>${escapeHtml(key)}:</b> ${escapeHtml(value)}</li>`).join('');
+      const details = [
+        ['Category', product.categoryName], ['Category ID', product.categoryId], ['Brand', product.brand], ['Model', product.model],
+        ['SKU', product.sku], ['Condition', human(product.condition)], ['Availability', human(product.availability)],
+        ['Stock quantity', product.stockQuantity], ['Status', human(product.status)], ['Featured', product.featured ? 'Yes' : 'No'],
+        ['URL slug', product.slug],
+      ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+      return `<article class="product"><div class="product-heading"><div><h2>${escapeHtml(product.title)}</h2><span>${escapeHtml(money(product.priceUgx))}</span></div><span class="status">${escapeHtml(human(product.status))}</span></div><dl>${details.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl><section><h3>Description</h3><p>${escapeHtml(product.description || 'No description provided.')}</p></section>${specifications ? `<section><h3>Specifications</h3><ul>${specifications}</ul></section>` : ''}</article>`;
+    }).join('');
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>CRITS Product Catalogue</title><style>
+      @page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#243b50;font-size:10pt;margin:0}.report-header{display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:2px solid #d85b32;padding-bottom:12px;margin-bottom:18px}.report-header img{width:145px;max-height:52px;object-fit:contain}.report-header h1{font-size:19pt;margin:0 0 5px}.report-header p,.report-footer{font-size:8pt;color:#6d7d8a;margin:0}.product{border:1px solid #d9e1e5;border-radius:5px;padding:13px 15px;margin:0 0 13px;break-inside:avoid}.product-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid #e8edef;padding-bottom:9px;margin-bottom:8px}.product-heading h2{font-size:13pt;margin:0 0 5px;color:#244864}.product-heading>div>span{font-weight:bold;color:#d85b32}.status{font-size:8pt;text-transform:uppercase;letter-spacing:.06em;color:#53697b;background:#edf2f4;padding:5px 7px;border-radius:12px;white-space:nowrap}.product dl{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin:0}.product dl>div{display:flex;gap:7px;padding:4px 0;border-bottom:1px solid #f0f2f3}.product dt{min-width:85px;color:#738494;font-weight:bold}.product dd{margin:0;overflow-wrap:anywhere}.product section{margin-top:9px}.product h3{font-size:9pt;margin:0 0 4px;color:#304e67}.product p{margin:0;white-space:pre-wrap;line-height:1.45}.product ul{margin:3px 0 0;padding-left:17px;columns:2}.product li{padding:2px 0;break-inside:avoid}.report-footer{border-top:1px solid #e1e6e8;padding-top:8px;margin-top:15px;text-align:center}@media print{.product{break-inside:avoid}a{color:inherit;text-decoration:none}}
+    </style></head><body><header class="report-header"><img src="${escapeHtml(`${window.location.origin}${base}/crits-logo-transparent.png`)}" alt="CRITS Limited"><div><h1>Product Catalogue</h1><p>${records.length} product records · Prepared ${escapeHtml(new Date().toLocaleDateString())}</p></div></header><main>${products}</main><footer class="report-footer">CRITS Limited · Internal catalogue export · Confirm product details before publication or transaction.</footer><script>window.addEventListener('load',()=>window.setTimeout(()=>window.print(),300));window.addEventListener('afterprint',()=>window.close());</script></body></html>`);
+    printWindow.document.close();
   };
   const saveRetentionSettings = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -819,7 +1209,7 @@ function Admin() {
       onError: () => setMessage('The retention setting could not be saved. Please try again.'),
     });
   };
-  const tabs: { id: typeof tab; name: string; icon: typeof LayoutDashboard }[] = [{ id: 'overview', name: 'Overview', icon: LayoutDashboard }, { id: 'products', name: 'Products', icon: Package }, { id: 'categories', name: 'Categories', icon: Tag }, { id: 'enquiries', name: 'Enquiries', icon: MessageCircle }, { id: 'data', name: 'Import / export', icon: FileText }, { id: 'settings', name: 'Privacy settings', icon: LockKeyhole }];
+  const tabs: { id: typeof tab; name: string; icon: typeof LayoutDashboard }[] = [{ id: 'overview', name: 'Overview', icon: LayoutDashboard }, { id: 'products', name: 'Products', icon: Package }, { id: 'properties', name: 'Real estate', icon: Building2 }, { id: 'categories', name: 'Categories', icon: Tag }, { id: 'enquiries', name: 'Enquiries', icon: MessageCircle }, { id: 'data', name: 'Import / export', icon: FileText }, { id: 'settings', name: 'Privacy settings', icon: LockKeyhole }];
   return <main className="admin-layout">
     <aside className="admin-sidebar"><Brand inverse /><div className="admin-brand-caption">STAFF WORKSPACE</div><div className="admin-side-label">MANAGE</div><nav>{tabs.map(({ id, name, icon: Icon }) => <button key={id} onClick={() => { setTab(id); setMessage(''); }} className={tab === id ? 'selected' : ''} data-testid={`button-admin-tab-${id}`}><Icon size={18} />{name}{id === 'enquiries' && !!overview.data?.openEnquiryCount && <span className="side-count">{overview.data.openEnquiryCount}</span>}</button>)}</nav><div className="admin-sidebar-bottom"><Link href="/" data-testid="link-admin-public"><ArrowLeft size={15} /> Public website</Link><span><ShieldCheck size={16} /> Restricted staff access</span></div></aside>
     <section className="admin-main"><header className="admin-topbar"><div><span className="admin-mobile-brand">CRITS / </span><span>Staff workspace</span><span className="admin-divider">/</span><b>{tabs.find((x) => x.id === tab)?.name}</b></div><Link href="/" className="admin-view-site">View public site <ArrowUpRight size={15} /></Link></header><div className="admin-content">
@@ -837,16 +1227,44 @@ function Admin() {
           <label>Price (UGX)<input name="price" type="number" min="0" step="1" defaultValue={editingProduct?.priceUgx ?? ''} /></label>
           <label>Stock quantity<input name="stock" type="number" min="0" step="1" defaultValue={editingProduct?.stockQuantity ?? ''} /></label>
           <label>SKU<input name="sku" defaultValue={editingProduct?.sku ?? ''} /></label>
-          <label>Source listing URL<input name="source" type="url" defaultValue={editingProduct?.sourceListingUrl ?? ''} /></label>
-          <label>Last verified<input name="sourceVerifiedAt" type="date" defaultValue={editingProduct?.sourceVerifiedAt ? new Date(editingProduct.sourceVerifiedAt).toISOString().slice(0, 10) : ''} /></label>
           <label className="wide">Description<textarea name="description" rows={3} defaultValue={editingProduct?.description ?? ''} /></label>
           <label className="wide">Specifications <small>One per line: Key: value</small><textarea name="specifications" rows={3} defaultValue={editingProduct ? Object.entries(editingProduct.specifications).map(([key, value]) => `${key}: ${value}`).join('\n') : ''} placeholder={'Memory: 16 GB\\nStorage: 512 GB'} /></label>
           <label className="wide">Image URLs <small>One URL per line · new uploads: {uploadedUrls.length}</small><textarea name="images" rows={2} defaultValue={editingProduct?.imageUrls.join('\n') ?? ''} /></label>
           <label className="wide image-upload-label">Upload product image <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => void uploadProductImage(e.target.files?.[0])} data-testid="input-product-image-upload" /><small>{uploadImage.isPending ? 'Preparing secure upload…' : 'JPEG, PNG or WEBP · up to 10 MB'}</small></label>
+          {!(editingProduct?.imageUrls.length || uploadedUrls.length) && <div className="wide admin-photo-guidance"><Package size={18} /><span><b>Product photo needed.</b> Upload a matching photo from the CRITS listing before publishing. A reference link does not automatically import its photo.</span></div>}
+          {!!(editingProduct?.imageUrls.length || uploadedUrls.length) && <div className="wide product-upload-preview">{[...(editingProduct?.imageUrls ?? []), ...uploadedUrls].map((url) => <img key={url} src={url} alt="Product photo preview" loading="lazy" />)}</div>}
           <label>Publication status<select name="status" defaultValue={editingProduct?.status ?? 'draft'}><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></label>
           <label className="check-field"><input type="checkbox" name="featured" defaultChecked={editingProduct?.featured ?? false} /> Feature on public home</label>
         </div><button className="button button-primary" type="submit" disabled={createProduct.isPending || updateProduct.isPending || uploadImage.isPending}>{createProduct.isPending || updateProduct.isPending ? 'Saving…' : editingProduct ? 'Update product' : 'Save product'} <Check size={15} /></button></form>}
-        <div className="admin-panel table-panel"><div className="panel-title"><div><span className="eyebrow">ALL RECORDS</span><h2>Catalogue</h2></div><Button onClick={exportCsv} variant="outline"><ArrowDownToLine size={15} /> Export CSV</Button></div>{adminProducts.isLoading ? <div className="skeleton-table" /> : adminProducts.isError ? <QueryFailure retry={() => adminProducts.refetch()} /> : adminProducts.data?.length ? <div className="table-scroll"><table><thead><tr><th>Product</th><th>Category</th><th>Condition</th><th>Status</th><th>Availability</th><th>Actions</th></tr></thead><tbody>{adminProducts.data.map((p) => <tr key={p.id} data-testid={`row-admin-product-${p.id}`}><td><b>{p.title}</b><small>{p.brand || p.model || p.sku || '—'}</small>{p.sourceListingUrl && <a className="admin-source-link" href={p.sourceListingUrl} target="_blank" rel="noreferrer">Source listing</a>}{p.sourceVerifiedAt && <small>Verified {new Date(p.sourceVerifiedAt).toLocaleDateString()}</small>}</td><td>{p.categoryName}</td><td>{human(p.condition)}</td><td><StatusPill value={p.status} /></td><td>{human(p.availability)}</td><td><div className="admin-row-actions"><button className="small-action" onClick={() => editCatalogueProduct(p)} data-testid={`button-edit-product-${p.id}`}>Edit</button>{p.status === 'published' ? <button className="small-action" onClick={() => changeProductStatus(p, 'draft')} data-testid={`button-unpublish-product-${p.id}`}>Unpublish</button> : p.status === 'archived' ? <button className="small-action" onClick={() => changeProductStatus(p, 'draft')} data-testid={`button-restore-product-${p.id}`}>Restore</button> : <button className="small-action" onClick={() => changeProductStatus(p, 'published')} data-testid={`button-publish-product-${p.id}`}>Publish</button>}{p.status !== 'archived' && <button className="small-action danger-action" onClick={() => changeProductStatus(p, 'archived')} data-testid={`button-archive-product-${p.id}`}>Archive</button>}</div></td></tr>)}</tbody></table></div> : <AdminEmpty icon={Package} title="No product records yet" copy="Create an approved product record to begin building the catalogue." action={<button className="text-button" onClick={() => setProductForm(true)}>Add a product <Plus size={15} /></button>} />}</div>
+        <div className="admin-panel table-panel"><div className="panel-title"><div><span className="eyebrow">ALL RECORDS</span><h2>Catalogue</h2></div><div className="catalog-export-actions"><Button onClick={exportCsv} variant="outline" disabled={!adminProducts.data?.length}><ArrowDownToLine size={15} /> Export CSV</Button><Button onClick={exportPdf} variant="outline" disabled={!adminProducts.data?.length}><FileText size={15} /> Export PDF</Button></div></div>{adminProducts.isLoading ? <div className="skeleton-table" /> : adminProducts.isError ? <QueryFailure retry={() => adminProducts.refetch()} /> : adminProducts.data?.length ? <div className="table-scroll"><table><thead><tr><th>Product</th><th>Photo</th><th>Category</th><th>Condition</th><th>Status</th><th>Availability</th><th>Actions</th></tr></thead><tbody>{adminProducts.data.map((p) => <tr key={p.id} data-testid={`row-admin-product-${p.id}`}><td><b>{p.title}</b><small>{p.brand || p.model || p.sku || 'Not provided'}</small></td><td><span className={p.imageUrls.length ? 'admin-photo-present' : 'admin-photo-needed'}>{p.imageUrls.length ? `${p.imageUrls.length} photo${p.imageUrls.length === 1 ? '' : 's'}` : 'Photo needed · Edit to upload'}</span></td><td>{p.categoryName}</td><td>{human(p.condition)}</td><td><StatusPill value={p.status} /></td><td>{human(p.availability)}</td><td><div className="admin-row-actions"><button className="small-action" onClick={() => editCatalogueProduct(p)} data-testid={`button-edit-product-${p.id}`}>Edit</button>{p.status === 'published' ? <button className="small-action" onClick={() => changeProductStatus(p, 'draft')} data-testid={`button-unpublish-product-${p.id}`}>Unpublish</button> : p.status === 'archived' ? <button className="small-action" onClick={() => changeProductStatus(p, 'draft')} data-testid={`button-restore-product-${p.id}`}>Restore</button> : <button className="small-action" onClick={() => changeProductStatus(p, 'published')} data-testid={`button-publish-product-${p.id}`}>Publish</button>}{p.status !== 'archived' && <button className="small-action danger-action" onClick={() => changeProductStatus(p, 'archived')}>Archive</button>}</div></td></tr>)}</tbody></table></div> : <AdminEmpty icon={Package} title="No product records yet" copy="Create an approved product record to begin building the catalogue." action={<button className="text-button" onClick={() => setProductForm(true)}>Add a product <Plus size={15} /></button>} />}</div>
+      </>}
+      {tab === 'properties' && <><div className="admin-title-row"><div><span className="eyebrow">REAL ESTATE MANAGEMENT</span><h1>Property listings</h1><p>Add and maintain land opportunities for the public Real Estate page.</p></div><button className="button button-primary" onClick={() => { setPropertyForm(!propertyForm); setEditingProperty(null); setPrefillNalyaProperty(false); setUploadedPropertyUrls([]); }} data-testid="button-create-property"><Plus size={16} /> Add listing</button></div>
+        {propertyForm && <form key={editingProperty?.id ?? (prefillNalyaProperty ? 'seed-nalya-property' : 'new-property')} className="admin-form-card" onSubmit={submitProperty}><div className="panel-title"><div><h2>{editingProperty ? `Edit ${editingProperty.title}` : prefillNalyaProperty ? 'Set up Naalya property listing' : 'Add real estate listing'}</h2><p>Published listings appear on the public Real Estate page. Add a matching photo before publishing.</p></div><button type="button" className="icon-button" onClick={() => { setPropertyForm(false); setEditingProperty(null); setPrefillNalyaProperty(false); setUploadedPropertyUrls([]); }} aria-label="Close form"><X size={18} /></button></div><div className="admin-form-grid">
+          <label>Listing title<input name="title" required maxLength={220} defaultValue={editingProperty?.title ?? (prefillNalyaProperty ? nalyaPropertyListing.title : '')} data-testid="input-admin-property-title" /></label>
+          <label>URL slug<input name="slug" maxLength={180} defaultValue={editingProperty?.slug ?? (prefillNalyaProperty ? nalyaPropertyListing.slug : '')} placeholder="Created from title if left blank" /></label>
+          <label>Location<input name="location" required maxLength={240} defaultValue={editingProperty?.location ?? (prefillNalyaProperty ? nalyaPropertyListing.location : '')} /></label>
+          <label>Land area<input name="landArea" required maxLength={80} defaultValue={editingProperty?.landArea ?? (prefillNalyaProperty ? nalyaPropertyListing.landArea : '')} /></label>
+          <label>Price (UGX)<input name="price" type="number" min="0" step="1" defaultValue={editingProperty?.priceUgx ?? (prefillNalyaProperty ? nalyaPropertyListing.priceUgx ?? '' : '')} /></label>
+          <label className="wide">Description<textarea name="description" rows={3} maxLength={10000} defaultValue={editingProperty?.description ?? (prefillNalyaProperty ? nalyaPropertyListing.description : '')} placeholder="Property details for public display" /></label>
+          <label className="wide">Photo URLs <small>One per line · uploaded photos: {uploadedPropertyUrls.length}</small><textarea name="images" rows={2} defaultValue={editingProperty?.imageUrls.join('\n') ?? ''} placeholder="Paste hosted image URLs or upload property photos" /></label>
+          <label className="wide image-upload-label">Upload property photo <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => void uploadPropertyImage(e.target.files?.[0])} data-testid="input-property-image-upload" /><small>{requestPropertyImageUpload.isPending ? 'Preparing secure upload…' : 'JPG, PNG or WEBP · up to 10 MB. Use the photo from the matching listing.'}</small></label>
+          {!!uploadedPropertyUrls.length && <div className="wide property-upload-preview">{uploadedPropertyUrls.map((url) => <img key={url} src={url} alt="Uploaded property preview" />)}</div>}
+          <label>Publication status<select name="status" defaultValue={editingProperty?.status ?? 'draft'}><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></label>
+          <label className="check-field"><input type="checkbox" name="featured" defaultChecked={editingProperty?.featured ?? prefillNalyaProperty} /> Feature on Real Estate page</label>
+        </div><button className="button button-primary" type="submit" disabled={createProperty.isPending || updateProperty.isPending || requestPropertyImageUpload.isPending}>{createProperty.isPending || updateProperty.isPending ? 'Saving…' : editingProperty ? 'Update listing' : 'Save listing'} <Check size={15} /></button></form>}
+        <div className="admin-panel table-panel property-admin-panel"><div className="panel-title"><div><span className="eyebrow">ALL RECORDS</span><h2>Real estate listings</h2></div></div>
+          <form className="property-admin-filters" onSubmit={(e) => { e.preventDefault(); setAppliedPropertySearch(propertySearch.trim()); setPropertyPage(1); }}>
+            <label>Search properties<input value={propertySearch} onChange={(e) => setPropertySearch(e.target.value)} placeholder="Title, location or land area" /></label>
+            <label>Status<select value={propertyStatus} onChange={(e) => { setPropertyStatus(e.target.value as typeof propertyStatus); setPropertyPage(1); }}><option value="">All statuses</option><option value="published">Published</option><option value="draft">Draft</option><option value="archived">Archived</option></select></label>
+            <button className="button button-outline" type="submit"><Search size={15} /> Search</button>
+            {(appliedPropertySearch || propertyStatus) && <button type="button" className="text-button" onClick={() => { setPropertySearch(''); setAppliedPropertySearch(''); setPropertyStatus(''); setPropertyPage(1); }}>Clear filters <X size={14} /></button>}
+          </form>
+          {adminProperties.isLoading ? <div className="skeleton-table" /> : adminProperties.isError ? <QueryFailure retry={() => adminProperties.refetch()} /> : adminPropertyItems.length ? <>
+            <div className="table-scroll"><table><thead><tr><th>Property</th><th>Area</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead><tbody>{adminPropertyItems.map((property) => <tr key={property.id} data-testid={`row-admin-property-${property.id}`}><td><div className="property-admin-name">{property.imageUrls[0] ? <img src={property.imageUrls[0]} alt="" /> : <Building2 size={20} />}<div><b>{property.title}</b><small>{property.location}</small>{!property.imageUrls.length && <small className="admin-photo-needed">Photo needed before publishing</small>}</div></div></td><td>{property.landArea}</td><td>{money(property.priceUgx)}</td><td><StatusPill value={property.status} /></td><td><div className="admin-row-actions"><button className="small-action" onClick={() => editPropertyListing(property)} data-testid={`button-edit-property-${property.id}`}>Edit</button>{property.status === 'published' ? <button className="small-action" onClick={() => changePropertyStatus(property, 'draft')}>Unpublish</button> : property.status === 'archived' ? <button className="small-action" onClick={() => changePropertyStatus(property, 'draft')}>Restore</button> : <button className="small-action" onClick={() => changePropertyStatus(property, 'published')}>Publish</button>}{property.status !== 'archived' && <button className="small-action danger-action" onClick={() => changePropertyStatus(property, 'archived')}>Archive</button>}</div></td></tr>)}</tbody></table></div>
+            <div className="property-result-bar"><span>Showing {(propertyPage - 1) * adminPropertyPageSize + 1} to {Math.min(propertyPage * adminPropertyPageSize, adminPropertyTotal)} of {adminPropertyTotal} listings</span><span>Page {propertyPage} of {adminPropertyPageCount}</span></div>
+            {adminPropertyPageCount > 1 && <nav className="catalog-pagination" aria-label="Admin property listings pagination"><button type="button" className="pagination-step" onClick={() => setPropertyPage((page) => Math.max(1, page - 1))} disabled={propertyPage <= 1}>Previous</button>{pageSequence(propertyPage, adminPropertyPageCount).map((item, index) => item === 'ellipsis' ? <span key={`admin-ellipsis-${index}`} className="pagination-ellipsis" aria-hidden="true">…</span> : <button type="button" key={item} className="pagination-number" onClick={() => setPropertyPage(item)} aria-label={`Go to property page ${item}`} aria-current={propertyPage === item ? 'page' : undefined}>{item}</button>)}<button type="button" className="pagination-step" onClick={() => setPropertyPage((page) => Math.min(adminPropertyPageCount, page + 1))} disabled={propertyPage >= adminPropertyPageCount}>Next</button></nav>}
+          </> : <AdminEmpty icon={Building2} title={appliedPropertySearch || propertyStatus ? 'No listings match these filters' : 'No saved property listings yet'} copy={appliedPropertySearch || propertyStatus ? 'Try a broader search or clear the filters.' : 'The public page currently features the Naalya opportunity. Prepare it here to save and manage it as a regular listing.'} action={appliedPropertySearch || propertyStatus ? <button className="text-button" onClick={() => { setPropertyForm(true); setEditingProperty(null); setPrefillNalyaProperty(false); setUploadedPropertyUrls([]); }}>Add a property <Plus size={15} /></button> : <div className="property-admin-empty-actions"><button className="button button-primary" onClick={() => { setPropertyForm(true); setEditingProperty(null); setPrefillNalyaProperty(true); setUploadedPropertyUrls([]); }}>Prepare Naalya listing <Plus size={15} /></button><button className="text-button" onClick={() => { setPropertyForm(true); setEditingProperty(null); setPrefillNalyaProperty(false); setUploadedPropertyUrls([]); }}>Add a different property <Plus size={15} /></button></div>} />}
+        </div>
       </>}
       {tab === 'categories' && <><div className="admin-title-row"><div><span className="eyebrow">CATALOGUE ORGANISATION</span><h1>Categories</h1><p>Keep product groups useful and easy to browse.</p></div><button className="button button-primary" onClick={() => { setCategoryForm(!categoryForm); setEditingCategory(null); }} data-testid="button-create-category"><Plus size={16} /> Add category</button></div>
         {categoryForm && <CategoryForm key={editingCategory?.id ?? 'new-category'} initial={editingCategory ?? undefined} pending={createCategory.isPending || updateCategory.isPending} onCancel={() => { setCategoryForm(false); setEditingCategory(null); }} onSubmit={(data) => {
@@ -867,16 +1285,16 @@ function Admin() {
         </form>
         {enquiryFrom && enquiryTo && enquiryFrom > enquiryTo ? <div className="form-error" role="alert">The start date must be on or before the end date.</div> : adminEnquiries.isLoading ? <div className="skeleton-table" /> : adminEnquiries.isError ? <QueryFailure retry={() => adminEnquiries.refetch()} /> : adminEnquiries.data?.length ? <div className="enquiry-admin-list">{adminEnquiries.data.map((e) => <EnquiryAdminCard key={e.id} enquiry={e} onUpdate={(data) => updateEnquiry.mutate({ id: e.id, data }, { onSuccess: () => { setMessage(`Enquiry ${e.reference} updated.`); void refreshAdmin(); }, onError: () => setMessage('Enquiry update failed.') })} pending={updateEnquiry.isPending} />)}</div> : <AdminEmpty icon={MessageCircle} title={enquirySearch || enquiryStatus || enquiryFrom || enquiryTo ? 'No enquiries match these filters' : 'No enquiries received yet'} copy={enquirySearch || enquiryStatus || enquiryFrom || enquiryTo ? 'Try a broader search or remove some filters.' : 'Customer product and contact requests will appear here.'} />}
       </>}
-      {tab === 'data' && <><div className="admin-title-row"><div><span className="eyebrow">CATALOGUE DATA</span><h1>Import & export</h1><p>Move product information in or out of the CRITS catalogue.</p></div></div><div className="data-tools"><section className="data-tool-card"><div className="tool-icon"><Upload /></div><span className="eyebrow">BATCH IMPORT</span><h2>Import product CSV</h2><p>Use the empty template. Include the current category ID, JSON object specifications, and JSON array image URLs. Imports create drafts or archived records for staff review, never published listings.</p><a className="button button-outline" href={`${base}/product-catalogue-template.csv`} download><ArrowDownToLine size={16} /> Download template</a><label className="file-picker"><input type="file" accept=".csv,text/csv" onChange={(e) => void importCsv(e.target.files?.[0])} data-testid="input-import-csv" /><Upload size={16} /> Choose CSV file</label>{importProducts.isPending && <p className="pending-note">Validating and importing…</p>}</section><section className="data-tool-card"><div className="tool-icon"><ArrowDownToLine /></div><span className="eyebrow">BACKUP / REVIEW</span><h2>Export catalogue CSV</h2><p>Exports all catalogue fields, including source details, specifications, image URLs, status, and featured state. Customer enquiry details are not included.</p><Button onClick={exportCsv} variant="outline" disabled={!adminProducts.data?.length}><ArrowDownToLine size={16} /> Download catalogue</Button></section></div><div className="admin-note"><ShieldCheck /><p><b>Keep source details accurate.</b> Only import product information approved by CRITS staff. Imported records remain out of the public catalogue until a staff member publishes them.</p></div></>}
+      {tab === 'data' && <><div className="admin-title-row"><div><span className="eyebrow">CATALOGUE DATA</span><h1>Import & export</h1><p>Move product information in or out of the CRITS catalogue.</p></div></div><div className="data-tools"><section className="data-tool-card"><div className="tool-icon"><Upload /></div><span className="eyebrow">BATCH IMPORT</span><h2>Import product CSV</h2><p>Use the empty template. Include the current category ID, JSON object specifications, and JSON array image URLs. Imports create drafts or archived records for staff review, never published listings.</p><a className="button button-outline" href={`${base}/product-catalogue-template.csv`} download><ArrowDownToLine size={16} /> Download template</a><label className="file-picker"><input type="file" accept=".csv,text/csv" onChange={(e) => void importCsv(e.target.files?.[0])} data-testid="input-import-csv" /><Upload size={16} /> Choose CSV file</label>{importProducts.isPending && <p className="pending-note">Validating and importing…</p>}</section><section className="data-tool-card"><div className="tool-icon"><ArrowDownToLine /></div><span className="eyebrow">BACKUP / REVIEW</span><h2>Export catalogue</h2><p>Download a CSV or open a print-ready PDF. The browser print dialog lets you save the PDF. Source URLs and customer enquiry details are excluded.</p><div className="catalog-export-actions"><Button onClick={exportCsv} variant="outline" disabled={!adminProducts.data?.length}><ArrowDownToLine size={16} /> Download CSV</Button><Button onClick={exportPdf} variant="outline" disabled={!adminProducts.data?.length}><FileText size={16} /> Export PDF</Button></div></section></div><div className="admin-note"><ShieldCheck /><p><b>Keep catalogue details accurate.</b> Only import product information approved by CRITS staff. Imported records remain out of the public catalogue until a staff member publishes them.</p></div></>}
       {tab === 'settings' && <><div className="admin-title-row"><div><span className="eyebrow">PRIVACY CONTROLS</span><h1>Enquiry retention</h1><p>Configure how long customer enquiry records are retained.</p></div></div>
         {adminSettings.isLoading ? <div className="admin-panel"><div className="skeleton-line" /><div className="skeleton-line short" /></div> : adminSettings.isError ? <QueryFailure retry={() => adminSettings.refetch()} /> : adminSettings.data && <div className="retention-layout"><form className="retention-panel" onSubmit={saveRetentionSettings}>
           <div className="retention-panel-heading"><span className="retention-icon"><LockKeyhole /></span><div><span className="eyebrow">ENQUIRY RECORDS</span><h2>Automatic deletion</h2><p>Choose a retention period for enquiries submitted through the website.</p></div></div>
           <label className="retention-toggle"><input type="checkbox" checked={retentionDisabled} onChange={(e) => { setRetentionDisabled(e.target.checked); setRetentionConfirmed(false); if (e.target.checked) setRetentionDays(''); }} data-testid="checkbox-retention-disabled" /><span><b>Disable automatic deletion</b><small>No retention period is set. Enquiry records are not automatically deleted.</small></span></label>
-          <label className="retention-days-field">Retention period in days<input type="number" min={1} max={3650} step={1} value={retentionDays} disabled={retentionDisabled} onChange={(e) => { setRetentionDays(e.target.value); setRetentionConfirmed(false); }} placeholder="Enter days (1–3650)" data-testid="input-retention-days" /></label>
+          <label className="retention-days-field">Retention period in days<input type="number" min={1} max={3650} step={1} value={retentionDays} disabled={retentionDisabled} onChange={(e) => { setRetentionDays(e.target.value); setRetentionConfirmed(false); }} placeholder="Enter from 1 to 3650 days" data-testid="input-retention-days" /></label>
           <div className="retention-warning" role="note"><CircleHelp /><div><b>Important: this setting can permanently delete enquiry records.</b><p>When a retention period is set, older enquiries may be permanently removed. Confirm the period is appropriate before saving.</p></div></div>
           <label className="retention-confirm"><input type="checkbox" checked={retentionConfirmed} onChange={(e) => setRetentionConfirmed(e.target.checked)} data-testid="checkbox-retention-confirm" /><span>I understand changing this setting may permanently delete older enquiry records.</span></label>
           <div className="retention-actions"><span>{adminSettings.data.updatedAt ? `Last updated ${new Date(adminSettings.data.updatedAt).toLocaleString()}` : 'No previous update recorded'}</span><button className="button button-primary" type="submit" disabled={updateSettings.isPending || !retentionConfirmed} data-testid="button-save-retention">{updateSettings.isPending ? 'Saving setting…' : 'Confirm & save'} <Check size={15} /></button></div>
-        </form><aside className="retention-side"><div className="launch-checklist"><span className="eyebrow">LAUNCH CHECKLIST</span><h2>Before choosing a retention period</h2><div><CheckCircle2 /><p><b>Confirm local privacy rules.</b><br />Check the applicable privacy requirements and retention obligations before enabling automatic deletion.</p></div><p>CRITS should select a period that matches its approved privacy policy and operational needs.</p></div><div className="admin-note"><ShieldCheck /><p><b>Current setting</b><br />{adminSettings.data.enquiryRetentionDays == null ? 'No automatic deletion — retention is unset.' : `${adminSettings.data.enquiryRetentionDays} days`}</p></div></aside></div>}
+        </form><aside className="retention-side"><div className="launch-checklist"><span className="eyebrow">LAUNCH CHECKLIST</span><h2>Before choosing a retention period</h2><div><CheckCircle2 /><p><b>Confirm local privacy rules.</b><br />Check the applicable privacy requirements and retention obligations before enabling automatic deletion.</p></div><p>CRITS should select a period that matches its approved privacy policy and operational needs.</p></div><div className="admin-note"><ShieldCheck /><p><b>Current setting</b><br />{adminSettings.data.enquiryRetentionDays == null ? 'Automatic deletion is off because no retention period is set.' : `${adminSettings.data.enquiryRetentionDays} days`}</p></div></aside></div>}
       </>}
     </div></section>
   </main>;
@@ -909,7 +1327,8 @@ function EnquiryAdminCard({ enquiry, onUpdate, pending }: { enquiry: AdminEnquir
 function Router() {
   const [location] = useLocation();
   return <ErrorBoundary resetKey={location}><Switch>
-    <Route path="/" component={Home} /><Route path="/catalog" component={Catalog} /><Route path="/products/:slug" component={ProductDetail} />
+    <Route path="/" component={Home} /><Route path="/technology" component={TechnologyHome} /><Route path="/real-estate" component={RealEstatePage} />
+    <Route path="/catalog" component={Catalog} /><Route path="/products/:slug" component={ProductDetail} />
     <Route path="/basket" component={Basket} /><Route path="/contact" component={Contact} /><Route path="/about" component={About} /><Route path="/services" component={Services} /><Route path="/privacy" component={Privacy} />
     <Route path="/sign-in/*?" component={clerkPubKey ? SignInPage : StaffAuthConfiguration} /><Route path="/sign-up/*?" component={clerkPubKey ? SignUpPage : StaffAuthConfiguration} /><Route path="/admin" component={Admin} /><Route component={NotFound} />
   </Switch></ErrorBoundary>;

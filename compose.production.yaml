@@ -55,6 +55,33 @@ services:
     networks:
       - crits
 
+  backup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backup
+    profiles:
+      - operations
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set a TLS-enabled managed PostgreSQL URL}
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?Set an encrypted off-host backup repository}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?Set a long random restic repository password}
+      CRITS_BACKUP_HOST: ${CRITS_BACKUP_HOST:-crits-production}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+    volumes:
+      - crits_media:/media:ro
+    networks:
+      - crits
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,uid=1000,gid=1000
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
   proxy:
     image: caddy:2-alpine
     restart: unless-stopped

@@ -11,7 +11,7 @@ function check(name, passed, message) {
 }
 
 function placeholder(candidate) {
-  return /^(?:REPLACE_|CHANGE_ME|YOUR_)/i.test(candidate);
+  return /(?:REPLACE_|CHANGE_ME|YOUR_|PRIVATE_DATABASE_HOST|\/\/USER:PASSWORD@|example\.com)/i.test(candidate);
 }
 
 for (const name of [
@@ -21,6 +21,8 @@ for (const name of [
   "VITE_CLERK_PUBLISHABLE_KEY",
   "CRITS_ADMIN_USER_IDS",
   "MEDIA_UPLOAD_SIGNING_KEY",
+  "RESTIC_REPOSITORY",
+  "RESTIC_PASSWORD",
   "APP_ORIGIN",
   "DOMAIN",
 ]) {
@@ -56,6 +58,18 @@ check("Clerk public key consistency", frontendClerkKey === clerkPublishableKey, 
 const adminIds = value("CRITS_ADMIN_USER_IDS").split(",").map((id) => id.trim()).filter(Boolean);
 check("Approved staff", adminIds.length > 0 && adminIds.every((id) => /^user_[A-Za-z0-9]+$/.test(id)), "provide at least one Clerk user ID (user_...), not an email address.");
 check("Media signing key", Buffer.byteLength(value("MEDIA_UPLOAD_SIGNING_KEY")) >= 32, "use a unique random secret of at least 32 bytes.");
+
+const backupRepository = value("RESTIC_REPOSITORY");
+check(
+  "Off-host backup repository",
+  /^(?:s3|b2|azure|gs|rclone|rest|sftp|swift):/i.test(backupRepository),
+  "configure a remote Restic repository; local paths are not an off-host backup.",
+);
+check(
+  "Backup encryption password",
+  Buffer.byteLength(value("RESTIC_PASSWORD")) >= 32,
+  "use a unique random password of at least 32 bytes and keep it in the host secret manager.",
+);
 
 let appOrigin;
 try {

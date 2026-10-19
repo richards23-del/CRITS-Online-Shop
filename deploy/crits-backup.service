@@ -1,0 +1,13 @@
+[Unit]
+Description=Encrypted backup of CRITS PostgreSQL data and uploaded media
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/crits
+ExecStart=/usr/bin/docker compose --env-file .env.production -f compose.production.yaml --profile operations run --rm backup backup
+TimeoutStartSec=2h
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true

@@ -13,8 +13,8 @@ if (!process.env.DATABASE_URL) {
 }
 
 export default defineConfig({
-  schema: path.resolve(__dirname, "./src/schema/crits.ts").replaceAll("\\", "/"),
-  out: path.resolve(__dirname, "./migrations").replaceAll("\\", "/"),
+  schema: "./src/schema/crits.ts",
+  out: "./migrations",
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,

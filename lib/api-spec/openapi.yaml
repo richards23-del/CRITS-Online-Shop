@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: catalogue
     description: Public product catalogue
+  - name: properties
+    description: Public CRITS Land Department listings
   - name: enquiries
     description: Customer quote requests
   - name: analytics
@@ -83,6 +85,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProductPage"
+  /properties:
+    get:
+      operationId: listProperties
+      tags: [properties]
+      summary: List published CRITS property listings
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 48, default: 12 }
+      responses:
+        "200":
+          description: Published land and property listings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PropertyPage" }
   /products/{slug}:
     get:
       operationId: getProduct
@@ -272,6 +295,76 @@ paths:
           description: Staff access not configured for this user
         "404":
           description: Product not found
+  /admin/properties:
+    get:
+      operationId: listAdminProperties
+      tags: [admin]
+      summary: List real estate listings for staff
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: "#/components/schemas/PropertyStatus" }
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 48, default: 12 }
+      responses:
+        "200":
+          description: Property listings including drafts and archived records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyPage"
+        "401": { description: Sign-in required }
+        "403": { description: Staff access not configured for this user }
+    post:
+      operationId: createAdminProperty
+      tags: [admin]
+      summary: Create a real estate listing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PropertyInput" }
+      responses:
+        "201":
+          description: Property listing created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Property" }
+        "400": { description: Invalid property listing }
+        "401": { description: Sign-in required }
+        "403": { description: Staff access not configured for this user }
+  /admin/properties/{id}:
+    patch:
+      operationId: updateAdminProperty
+      tags: [admin]
+      summary: Edit, publish, unpublish or archive a property listing
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PropertyUpdate" }
+      responses:
+        "200":
+          description: Property listing updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Property" }
+        "400": { description: Invalid property listing }
+        "401": { description: Sign-in required }
+        "403": { description: Staff access not configured for this user }
+        "404": { description: Property not found }
   /admin/categories:
     get:
       operationId: listAdminCategories
@@ -446,6 +539,26 @@ paths:
           description: Sign-in required
         "403":
           description: Staff access not configured for this user
+  /storage/property-uploads/request-url:
+    post:
+      operationId: requestPropertyImageUpload
+      tags: [storage]
+      summary: Request a temporary URL to upload a property image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImageUploadInput" }
+      responses:
+        "200":
+          description: Temporary upload URL and public property image path
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageUploadResponse" }
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access not configured for this user
 components:
   schemas:
     HealthStatus:
@@ -464,6 +577,75 @@ components:
     ProductStatus:
       type: string
       enum: [draft, published, archived]
+    PropertyStatus:
+      type: string
+      enum: [draft, published, archived]
+    Property:
+      type: object
+      required: [id, slug, title, location, landArea, description, imageUrls, status, featured, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        location: { type: string }
+        landArea: { type: string }
+        description: { type: string }
+        imageUrls:
+          type: array
+          items: { type: string }
+        priceUgx: { type: ["integer", "null"], minimum: 0 }
+        sourceListingUrl: { type: ["string", "null"], format: uri }
+        sourceVerifiedAt: { type: ["string", "null"], format: date }
+        status: { $ref: "#/components/schemas/PropertyStatus" }
+        featured: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PropertyPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Property" }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    PropertyInput:
+      type: object
+      required: [slug, title, location, landArea, description, imageUrls, status, featured]
+      properties:
+        slug: { type: string, minLength: 1, maxLength: 180 }
+        title: { type: string, minLength: 1, maxLength: 220 }
+        location: { type: string, minLength: 1, maxLength: 240 }
+        landArea: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 10000 }
+        imageUrls:
+          type: array
+          maxItems: 12
+          items: { type: string, maxLength: 1000 }
+        priceUgx: { type: ["integer", "null"], minimum: 0 }
+        sourceListingUrl: { type: ["string", "null"], format: uri }
+        sourceVerifiedAt: { type: ["string", "null"], format: date }
+        status: { $ref: "#/components/schemas/PropertyStatus" }
+        featured: { type: boolean }
+    PropertyUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        slug: { type: string, minLength: 1, maxLength: 180 }
+        title: { type: string, minLength: 1, maxLength: 220 }
+        location: { type: string, minLength: 1, maxLength: 240 }
+        landArea: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 10000 }
+        imageUrls:
+          type: array
+          maxItems: 12
+          items: { type: string, maxLength: 1000 }
+        priceUgx: { type: ["integer", "null"], minimum: 0 }
+        sourceListingUrl: { type: ["string", "null"], format: uri }
+        sourceVerifiedAt: { type: ["string", "null"], format: date }
+        status: { $ref: "#/components/schemas/PropertyStatus" }
+        featured: { type: boolean }
     EnquiryStatus:
       type: string
       enum: [new, in_progress, replied, closed]

@@ -13,11 +13,11 @@ Use this checklist for the public launch. Items marked **CRITS decision** need a
 ## Domain, hosting, and secrets
 
 - [ ] Point the chosen domain to the deployment host and confirm HTTPS works. The included Docker setup terminates TLS through Caddy and serves the storefront and API on one origin.
-- [ ] Copy `deploy/production.env.example` to the private root file `.env.production`, replace every example value, and keep that file out of Git. Prefer the host's secret manager for long-lived deployment.
+- [ ] Copy `deploy/production.env.example` to the private root file `.env.production`, replace every example value, set permissions to `0600`, and keep that file out of Git. Prefer the host's secret manager for long-lived deployment.
 - [ ] Run `pnpm run preflight:deploy`; it checks configuration without printing secret values. Fix every reported error before building.
 - [ ] Configure `APP_ORIGIN` and `DOMAIN` to the same public host. Keep `TRUST_PROXY_HOPS` at the actual trusted reverse-proxy count (one for the included Caddy service).
-- [ ] Use managed PostgreSQL with private networking and TLS. Set a dedicated database login, encrypted automated backups, and a tested restore process.
-- [ ] Use the app's persistent `crits_media` volume for product images and arrange separate encrypted, off-host backups for that volume. Keep the deployment to one API instance while media uses the local volume.
+- [ ] Use managed PostgreSQL with private networking and TLS. Set a dedicated database login and configure the private remote Restic repository and password in the host secret manager or a root-only `.env.production` file.
+- [ ] Initialize the encrypted Restic repository, install and enable `deploy/crits-backup.timer`, and confirm database and media backups complete. Keep the deployment to one API instance while media uses the local volume.
 - [ ] Keep port 8080 private to the proxy. Expose only ports 80 and 443 from the included stack; do not expose PostgreSQL publicly.
 
 ## Database and release procedure
@@ -27,7 +27,7 @@ Use this checklist for the public launch. Items marked **CRITS decision** need a
 - [ ] Build the `migrator` target and apply migrations once, before deploying the new application image. Do not use `drizzle-kit push` against production.
 - [ ] Confirm `/api/healthz` reports ready after the migration, and check the deployment logs for startup errors.
 - [ ] Verify a failed database connection or missing schema returns an unhealthy readiness result and does not serve the app as healthy.
-- [ ] Confirm the first backup can be listed and restore it into a separate non-production database. Test a separate product-media restore as well.
+- [ ] Confirm database and media snapshots can be listed. Restore them into a separate non-production database and media directory, then verify catalogue records and images.
 
 ## Catalogue and customer workflows
 
@@ -52,4 +52,4 @@ Use this checklist for the public launch. Items marked **CRITS decision** need a
 - Production Clerk keys, domain, staff sign-in policy, and production staff IDs must be supplied by CRITS.
 - Business ownership of catalogue photos/content, public contact details, privacy wording, retention, and any Candid Services claims require CRITS approval.
 - No payment, delivery, or automatic enquiry notification service is configured.
-- Production backups and an actual restore rehearsal must be established by the hosting operator.
+- The hosting operator must configure the remote backup destination, protect its credentials, enable the daily timer, and complete an actual restore rehearsal.

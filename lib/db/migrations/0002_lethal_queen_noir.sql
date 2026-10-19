@@ -1,0 +1,1 @@
+ALTER TABLE "crits_properties" ALTER COLUMN "price_ugx" SET DATA TYPE bigint;

@@ -1,5 +1,6 @@
 import {
   boolean,
+  bigint,
   date,
   integer,
   jsonb,
@@ -65,6 +66,32 @@ export const productsTable = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [uniqueIndex("crits_products_slug_uq").on(table.slug)],
+);
+
+export const propertiesTable = pgTable(
+  "crits_properties",
+  {
+    id: serial("id").primaryKey(),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    location: text("location").notNull(),
+    landArea: text("land_area").notNull(),
+    description: text("description").notNull().default(""),
+    imageUrls: text("image_urls").array().notNull().default([]),
+    priceUgx: bigint("price_ugx", { mode: "number" }),
+    sourceListingUrl: text("source_listing_url"),
+    sourceVerifiedAt: date("source_verified_at", { mode: "string" }),
+    status: text("status").notNull().default("draft"),
+    featured: boolean("featured").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [uniqueIndex("crits_properties_slug_uq").on(table.slug)],
 );
 
 export const enquiriesTable = pgTable(

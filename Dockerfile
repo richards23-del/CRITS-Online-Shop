@@ -12,6 +12,17 @@ RUN pnpm run build
 FROM build AS migrator
 CMD ["pnpm", "--filter", "@workspace/db", "run", "migrate"]
 
+FROM postgres:17-alpine AS backup
+RUN apk add --no-cache ca-certificates restic \
+    && adduser -D -u 1000 backup
+COPY --chown=1000:1000 scripts/backup-production.sh /usr/local/bin/crits-backup
+RUN sed -i 's/\r$//' /usr/local/bin/crits-backup \
+    && chmod 0555 /usr/local/bin/crits-backup
+ENV RESTIC_CACHE_DIR=/tmp/restic \
+    TMPDIR=/tmp
+USER 1000:1000
+ENTRYPOINT ["/usr/local/bin/crits-backup"]
+
 FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     API_HOST=0.0.0.0 \

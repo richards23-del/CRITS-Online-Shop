@@ -86,6 +86,51 @@ export const ListProductsResponse = zod.object({
 
 
 /**
+ * @summary List published CRITS property listings
+ */
+export const listPropertiesQueryQMax = 120;
+
+export const listPropertiesQueryPageDefault = 1;
+
+export const listPropertiesQueryPageSizeDefault = 12;
+export const listPropertiesQueryPageSizeMax = 48;
+
+
+
+export const ListPropertiesQueryParams = zod.object({
+  "q": zod.coerce.string().max(listPropertiesQueryQMax).optional(),
+  "page": zod.coerce.number().int().min(1).default(listPropertiesQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listPropertiesQueryPageSizeMax).default(listPropertiesQueryPageSizeDefault)
+})
+
+export const listPropertiesResponseItemsItemPriceUgxMin = 0;
+
+
+
+export const ListPropertiesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "location": zod.string(),
+  "landArea": zod.string(),
+  "description": zod.string(),
+  "imageUrls": zod.array(zod.string()),
+  "priceUgx": zod.number().int().min(listPropertiesResponseItemsItemPriceUgxMin).nullish(),
+  "sourceListingUrl": zod.string().url().nullish(),
+  "sourceVerifiedAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "featured": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int(),
+  "total": zod.number().int()
+})
+
+
+/**
  * @summary Get a published product and related products
  */
 export const GetProductParams = zod.object({
@@ -570,6 +615,174 @@ export const UpdateAdminProductResponse = zod.object({
 
 
 /**
+ * @summary List real estate listings for staff
+ */
+export const listAdminPropertiesQueryQMax = 120;
+
+export const listAdminPropertiesQueryPageDefault = 1;
+
+export const listAdminPropertiesQueryPageSizeDefault = 12;
+export const listAdminPropertiesQueryPageSizeMax = 48;
+
+
+
+export const ListAdminPropertiesQueryParams = zod.object({
+  "status": zod.enum(['draft', 'published', 'archived']).optional(),
+  "q": zod.coerce.string().max(listAdminPropertiesQueryQMax).optional(),
+  "page": zod.coerce.number().int().min(1).default(listAdminPropertiesQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listAdminPropertiesQueryPageSizeMax).default(listAdminPropertiesQueryPageSizeDefault)
+})
+
+export const listAdminPropertiesResponsePriceUgxMin = 0;
+
+
+
+export const ListAdminPropertiesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "location": zod.string(),
+  "landArea": zod.string(),
+  "description": zod.string(),
+  "imageUrls": zod.array(zod.string()),
+  "priceUgx": zod.number().int().min(listAdminPropertiesResponsePriceUgxMin).nullish(),
+  "sourceListingUrl": zod.string().url().nullish(),
+  "sourceVerifiedAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "featured": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListAdminPropertiesResponse = zod.object({
+  "items": zod.array(ListAdminPropertiesResponseItem),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int(),
+  "total": zod.number().int()
+})
+
+
+/**
+ * @summary Create a real estate listing
+ */
+export const createAdminPropertyBodySlugMax = 180;
+
+export const createAdminPropertyBodyTitleMax = 220;
+
+export const createAdminPropertyBodyLocationMax = 240;
+
+export const createAdminPropertyBodyLandAreaMax = 80;
+
+export const createAdminPropertyBodyDescriptionMax = 10000;
+
+export const createAdminPropertyBodyImageUrlsItemMax = 1000;
+
+export const createAdminPropertyBodyImageUrlsMax = 12;
+
+export const createAdminPropertyBodyPriceUgxMin = 0;
+
+
+
+export const CreateAdminPropertyBody = zod.object({
+  "slug": zod.string().min(1).max(createAdminPropertyBodySlugMax),
+  "title": zod.string().min(1).max(createAdminPropertyBodyTitleMax),
+  "location": zod.string().min(1).max(createAdminPropertyBodyLocationMax),
+  "landArea": zod.string().min(1).max(createAdminPropertyBodyLandAreaMax),
+  "description": zod.string().max(createAdminPropertyBodyDescriptionMax),
+  "imageUrls": zod.array(zod.string().max(createAdminPropertyBodyImageUrlsItemMax)).max(createAdminPropertyBodyImageUrlsMax),
+  "priceUgx": zod.number().int().min(createAdminPropertyBodyPriceUgxMin).nullish(),
+  "sourceListingUrl": zod.string().url().nullish(),
+  "sourceVerifiedAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "featured": zod.boolean()
+})
+
+export const createAdminPropertyResponsePriceUgxMin = 0;
+
+
+
+export const CreateAdminPropertyResponse = zod.object({
+  "id": zod.number().int(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "location": zod.string(),
+  "landArea": zod.string(),
+  "description": zod.string(),
+  "imageUrls": zod.array(zod.string()),
+  "priceUgx": zod.number().int().min(createAdminPropertyResponsePriceUgxMin).nullish(),
+  "sourceListingUrl": zod.string().url().nullish(),
+  "sourceVerifiedAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "featured": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Edit, publish, unpublish or archive a property listing
+ */
+
+
+
+export const UpdateAdminPropertyParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const updateAdminPropertyBodySlugMax = 180;
+
+export const updateAdminPropertyBodyTitleMax = 220;
+
+export const updateAdminPropertyBodyLocationMax = 240;
+
+export const updateAdminPropertyBodyLandAreaMax = 80;
+
+export const updateAdminPropertyBodyDescriptionMax = 10000;
+
+export const updateAdminPropertyBodyImageUrlsItemMax = 1000;
+
+export const updateAdminPropertyBodyImageUrlsMax = 12;
+
+export const updateAdminPropertyBodyPriceUgxMin = 0;
+
+
+
+export const UpdateAdminPropertyBody = zod.object({
+  "slug": zod.string().min(1).max(updateAdminPropertyBodySlugMax).optional(),
+  "title": zod.string().min(1).max(updateAdminPropertyBodyTitleMax).optional(),
+  "location": zod.string().min(1).max(updateAdminPropertyBodyLocationMax).optional(),
+  "landArea": zod.string().min(1).max(updateAdminPropertyBodyLandAreaMax).optional(),
+  "description": zod.string().max(updateAdminPropertyBodyDescriptionMax).optional(),
+  "imageUrls": zod.array(zod.string().max(updateAdminPropertyBodyImageUrlsItemMax)).max(updateAdminPropertyBodyImageUrlsMax).optional(),
+  "priceUgx": zod.number().int().min(updateAdminPropertyBodyPriceUgxMin).nullish(),
+  "sourceListingUrl": zod.string().url().nullish(),
+  "sourceVerifiedAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']).optional(),
+  "featured": zod.boolean().optional()
+})
+
+export const updateAdminPropertyResponsePriceUgxMin = 0;
+
+
+
+export const UpdateAdminPropertyResponse = zod.object({
+  "id": zod.number().int(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "location": zod.string(),
+  "landArea": zod.string(),
+  "description": zod.string(),
+  "imageUrls": zod.array(zod.string()),
+  "priceUgx": zod.number().int().min(updateAdminPropertyResponsePriceUgxMin).nullish(),
+  "sourceListingUrl": zod.string().url().nullish(),
+  "sourceVerifiedAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "featured": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List categories for catalogue management
  */
 export const ListAdminCategoriesResponseItem = zod.object({
@@ -774,6 +987,27 @@ export const RequestProductImageUploadBody = zod.object({
 })
 
 export const RequestProductImageUploadResponse = zod.object({
+  "uploadURL": zod.string().url(),
+  "imageUrl": zod.string()
+})
+
+
+/**
+ * @summary Request a temporary URL to upload a property image
+ */
+export const requestPropertyImageUploadBodyNameMax = 255;
+
+export const requestPropertyImageUploadBodySizeMax = 10485760;
+
+
+
+export const RequestPropertyImageUploadBody = zod.object({
+  "name": zod.string().min(1).max(requestPropertyImageUploadBodyNameMax),
+  "size": zod.number().int().min(1).max(requestPropertyImageUploadBodySizeMax),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp'])
+})
+
+export const RequestPropertyImageUploadResponse = zod.object({
   "uploadURL": zod.string().url(),
   "imageUrl": zod.string()
 })

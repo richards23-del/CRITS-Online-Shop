@@ -37,14 +37,20 @@ import type {
   ImageUploadResponse,
   ListAdminEnquiriesParams,
   ListAdminProductsParams,
+  ListAdminPropertiesParams,
   ListProductsParams,
+  ListPropertiesParams,
   Product,
   ProductDetail,
   ProductImportInput,
   ProductImportResult,
   ProductInput,
   ProductPage,
-  ProductUpdate
+  ProductUpdate,
+  Property,
+  PropertyInput,
+  PropertyPage,
+  PropertyUpdate
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -224,6 +230,90 @@ export function useListProducts<TData = Awaited<ReturnType<typeof listProducts>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListProductsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListPropertiesUrl = (params?: ListPropertiesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/properties?${stringifiedParams}` : `/api/properties`
+}
+
+/**
+ * @summary List published CRITS property listings
+ */
+export const listProperties = async (params?: ListPropertiesParams, options?: Parameters<typeof customFetch>[1]): Promise<PropertyPage> => {
+
+  return customFetch<PropertyPage>(getListPropertiesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPropertiesQueryKey = (params?: ListPropertiesParams,) => {
+    return [
+    `/api/properties`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPropertiesQueryOptions = <TData = Awaited<ReturnType<typeof listProperties>>, TError = ErrorType<unknown>>(params?: ListPropertiesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProperties>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPropertiesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProperties>>> = ({ signal }) => listProperties(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProperties>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPropertiesQueryResult = NonNullable<Awaited<ReturnType<typeof listProperties>>>
+export type ListPropertiesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List published CRITS property listings
+ */
+
+export function useListProperties<TData = Awaited<ReturnType<typeof listProperties>>, TError = ErrorType<unknown>>(
+ params?: ListPropertiesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProperties>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPropertiesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -1069,6 +1159,267 @@ export const useUpdateAdminProduct = <TError = ErrorType<void>,
       return useMutation(getUpdateAdminProductMutationOptions(options));
     }
 
+export const getListAdminPropertiesUrl = (params?: ListAdminPropertiesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/properties?${stringifiedParams}` : `/api/admin/properties`
+}
+
+/**
+ * @summary List real estate listings for staff
+ */
+export const listAdminProperties = async (params?: ListAdminPropertiesParams, options?: Parameters<typeof customFetch>[1]): Promise<PropertyPage> => {
+
+  return customFetch<PropertyPage>(getListAdminPropertiesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminPropertiesQueryKey = (params?: ListAdminPropertiesParams,) => {
+    return [
+    `/api/admin/properties`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminPropertiesQueryOptions = <TData = Awaited<ReturnType<typeof listAdminProperties>>, TError = ErrorType<void>>(params?: ListAdminPropertiesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminProperties>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminPropertiesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminProperties>>> = ({ signal }) => listAdminProperties(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminProperties>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminPropertiesQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminProperties>>>
+export type ListAdminPropertiesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List real estate listings for staff
+ */
+
+export function useListAdminProperties<TData = Awaited<ReturnType<typeof listAdminProperties>>, TError = ErrorType<void>>(
+ params?: ListAdminPropertiesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminProperties>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminPropertiesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateAdminPropertyUrl = () => {
+
+
+
+
+  return `/api/admin/properties`
+}
+
+/**
+ * @summary Create a real estate listing
+ */
+export const createAdminProperty = async (propertyInput: PropertyInput, options?: Parameters<typeof customFetch>[1]): Promise<Property> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Property>(getCreateAdminPropertyUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(propertyInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminPropertyMutationKey = () => ['createAdminProperty'] as const;
+
+export const getCreateAdminPropertyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminProperty>>, TError,CreateAdminPropertyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminProperty>>, TError,CreateAdminPropertyMutationVariables, TContext> => {
+
+const mutationKey = getCreateAdminPropertyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminProperty>>, CreateAdminPropertyMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminProperty(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminPropertyMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminProperty>>>
+    export type CreateAdminPropertyMutationBody = BodyType<PropertyInput>
+    export type CreateAdminPropertyMutationError = ErrorType<void>
+    export type CreateAdminPropertyMutationVariables = {data: BodyType<PropertyInput>}
+
+    /**
+ * @summary Create a real estate listing
+ */
+export const useCreateAdminProperty = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminProperty>>, TError,CreateAdminPropertyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminProperty>>,
+        TError,
+        CreateAdminPropertyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateAdminPropertyMutationOptions(options));
+    }
+
+export const getUpdateAdminPropertyUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/properties/${id}`
+}
+
+/**
+ * @summary Edit, publish, unpublish or archive a property listing
+ */
+export const updateAdminProperty = async (id: number,
+    propertyUpdate: PropertyUpdate, options?: Parameters<typeof customFetch>[1]): Promise<Property> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Property>(getUpdateAdminPropertyUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(propertyUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminPropertyMutationKey = () => ['updateAdminProperty'] as const;
+
+export const getUpdateAdminPropertyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminProperty>>, TError,UpdateAdminPropertyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminProperty>>, TError,UpdateAdminPropertyMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminPropertyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminProperty>>, UpdateAdminPropertyMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAdminProperty(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminPropertyMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminProperty>>>
+    export type UpdateAdminPropertyMutationBody = BodyType<PropertyUpdate>
+    export type UpdateAdminPropertyMutationError = ErrorType<void>
+    export type UpdateAdminPropertyMutationVariables = {id: number;data: BodyType<PropertyUpdate>}
+
+    /**
+ * @summary Edit, publish, unpublish or archive a property listing
+ */
+export const useUpdateAdminProperty = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminProperty>>, TError,UpdateAdminPropertyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminProperty>>,
+        TError,
+        UpdateAdminPropertyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminPropertyMutationOptions(options));
+    }
+
 export const getListAdminCategoriesUrl = () => {
 
 
@@ -1747,5 +2098,93 @@ export const useRequestProductImageUpload = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRequestProductImageUploadMutationOptions(options));
+    }
+
+export const getRequestPropertyImageUploadUrl = () => {
+
+
+
+
+  return `/api/storage/property-uploads/request-url`
+}
+
+/**
+ * @summary Request a temporary URL to upload a property image
+ */
+export const requestPropertyImageUpload = async (imageUploadInput: ImageUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<ImageUploadResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ImageUploadResponse>(getRequestPropertyImageUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(imageUploadInput)
+  }
+);}
+
+
+
+
+
+export const getRequestPropertyImageUploadMutationKey = () => ['requestPropertyImageUpload'] as const;
+
+export const getRequestPropertyImageUploadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPropertyImageUpload>>, TError,RequestPropertyImageUploadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestPropertyImageUpload>>, TError,RequestPropertyImageUploadMutationVariables, TContext> => {
+
+const mutationKey = getRequestPropertyImageUploadMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestPropertyImageUpload>>, RequestPropertyImageUploadMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestPropertyImageUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestPropertyImageUploadMutationResult = NonNullable<Awaited<ReturnType<typeof requestPropertyImageUpload>>>
+    export type RequestPropertyImageUploadMutationBody = BodyType<ImageUploadInput>
+    export type RequestPropertyImageUploadMutationError = ErrorType<void>
+    export type RequestPropertyImageUploadMutationVariables = {data: BodyType<ImageUploadInput>}
+
+    /**
+ * @summary Request a temporary URL to upload a property image
+ */
+export const useRequestPropertyImageUpload = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPropertyImageUpload>>, TError,RequestPropertyImageUploadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestPropertyImageUpload>>,
+        TError,
+        RequestPropertyImageUploadMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRequestPropertyImageUploadMutationOptions(options));
     }
 

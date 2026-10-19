@@ -10,6 +10,7 @@ router.get("/healthz", async (req, res): Promise<void> => {
       SELECT
         to_regclass('public.crits_categories') IS NOT NULL AS categories,
         to_regclass('public.crits_products') IS NOT NULL AS products,
+        to_regclass('public.crits_properties') IS NOT NULL AS properties,
         to_regclass('public.crits_enquiries') IS NOT NULL AS enquiries,
         to_regclass('public.crits_enquiry_items') IS NOT NULL AS enquiry_items,
         to_regclass('public.crits_analytics_events') IS NOT NULL AS analytics_events,

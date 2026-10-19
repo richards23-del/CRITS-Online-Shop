@@ -15,14 +15,14 @@
 The included deployment uses Docker, a managed PostgreSQL service, one API container, a persistent media volume, and Caddy for automatic HTTPS. The API port is private to the Compose network; only Caddy exposes ports 80 and 443.
 
 1. Provision a domain, a TLS-enabled managed PostgreSQL database, and an encrypted database backup policy. Point the domain's DNS to the Docker host and allow inbound ports 80 and 443.
-2. Copy `deploy/production.env.example` to `.env.production`. Replace every placeholder; keep this file out of Git. Prefer a deployment secret manager.
+2. Copy `deploy/production.env.example` to `.env.production`, replace every placeholder, and set its permissions to `0600`. Keep it out of Git. Prefer a deployment secret manager.
 3. Create the Clerk Production instance, configure the domain and allowed sign-in methods, issue/invite the approved staff accounts, and add their production user IDs to the environment file. Development account IDs do not work in Production.
-4. Run `pnpm run preflight:deploy`. It checks required values, Clerk key prefixes and consistency, the database TLS mode, admin ID shape, origin/domain match, proxy count, and absolute media path without printing secret values.
+4. Run `pnpm run preflight:deploy`. It checks required values, Clerk key prefixes and consistency, the database TLS mode, admin ID shape, origin/domain match, proxy count, absolute media path, and encrypted remote backup configuration without printing secret values.
 5. Review migrations under `lib/db/migrations`. The initial migration creates a fresh schema; if the target database already has CRITS tables or data, stop and plan a backed-up schema/data adoption instead. For a clean database, apply the migration once with `docker-compose --env-file .env.production -f compose.production.yaml --profile operations run --rm migrate`.
 6. Deploy with `docker-compose --env-file .env.production -f compose.production.yaml up --build -d`.
 7. Confirm the API health check is ready, sign in with an approved production account, check the storefront and admin workflows, then confirm the backup and media restore procedures.
 
-The API must stay at one instance while it uses the local media volume. The named `crits_media` volume is durable across container rebuilds but is not an off-host backup. Arrange a separate encrypted, off-host backup for product images and test restoring it. For horizontal scaling, replace filesystem media with shared managed object storage before adding API instances.
+The API must stay at one instance while it uses the local media volume. The named `crits_media` volume is durable across container rebuilds but is not an off-host backup. The operations profile includes a restricted Restic container and a systemd daily timer for encrypted database and media backups. Configure a private remote repository and its credentials before using it. For horizontal scaling, replace filesystem media with shared managed object storage before adding API instances.
 
 `TRUST_PROXY_HOPS` must equal the number of trusted reverse proxies. The included Caddy service is one hop. Do not publish port 8080, trust client-supplied forwarding headers, or expose PostgreSQL publicly. Production requires `sslmode=require`, `verify-ca`, or `verify-full` in the database connection URL.
 
@@ -49,27 +49,59 @@ Never commit `.env.local` or `.env.production`, add secrets to documentation, or
 ## Catalogue and product media
 
 - Add only CRITS-approved catalogue records. CSV imports create drafts or archived records; publish each product after review.
-- Product source URLs and verification dates can be stored with records.
+- Source URLs are not shown in admin screens or catalogue exports, and public listings do not link to them. Existing stored source metadata is retained to avoid changing catalogue records.
 - Uploaded product images are public. Do not upload customer documents or private files through the catalogue workflow.
 - Confirm CRITS has rights to each image and description. The Jiji public page is not an approved export interface; do not scrape or reuse listing content without permission.
 - Back up database and media separately. A database dump does not contain product images.
 
 ## Backups and recovery
 
-Use a trusted shell connected to the managed database to create a compressed backup:
+Set `RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, and any provider credentials in the deployment secret manager or root-only `.env.production` file (`chmod 0600`). Do not reuse Clerk or media-signing secrets. Keep the remote repository private and outside the app host. Initialize it once:
+
+```sh
+docker compose --env-file .env.production -f compose.production.yaml --profile operations run --rm backup init
+```
+
+On the Linux production host, the supplied timer runs database and media backups daily at approximately 02:15 UTC. The service expects the checkout under `/opt/crits`; edit `WorkingDirectory` if the deployment uses another path. Install and enable it as root:
+
+```sh
+install -m 0644 deploy/crits-backup.service /etc/systemd/system/crits-backup.service
+install -m 0644 deploy/crits-backup.timer /etc/systemd/system/crits-backup.timer
+systemctl daemon-reload
+systemctl enable --now crits-backup.timer
+systemctl start crits-backup.service
+systemctl list-timers crits-backup.timer
+journalctl -u crits-backup.service --since today
+```
+
+The restricted backup container streams a custom-format PostgreSQL dump into Restic, backs up the mounted media volume, applies a 14 daily / 8 weekly / 12 monthly retention policy, prunes old data, and checks repository metadata plus a rotating 5% data subset. Use `backup list-database`, `backup list-media`, or `backup check` instead of the final `backup` argument to inspect snapshots or check repository integrity.
+
+Restore into an isolated recovery environment first. Supply the same repository and password through that host's secret manager, then restore selected snapshots into a protected temporary directory:
+
+```sh
+restic snapshots --tag database
+restic restore SNAPSHOT_ID --target /secure/restore
+pg_restore --clean --if-exists --no-owner --dbname="$RESTORE_DATABASE_URL" /secure/restore/crits-database.dump
+restic snapshots --tag media
+restic restore SNAPSHOT_ID --tag media --target /secure/restore
+```
+
+The database restore target must be a separate non-production database; `--clean` removes existing objects in that target. Check restored images and catalogue references in the recovery environment. Do not restore to production except under an approved incident recovery plan.
+
+For manual backups outside the included Docker stack, use a trusted shell connected to the managed database:
 
 ```sh
 pg_dump "$DATABASE_URL" --format=custom --file="crits-db-$(date +%F).dump"
 pg_restore --list "crits-db-YYYY-MM-DD.dump"
 ```
 
-Restore only to a verified non-production target first and retain a separate current backup:
+Restore the archive to an isolated database first and retain a separate current backup:
 
 ```sh
 pg_restore --clean --if-exists --no-owner --dbname="$RESTORE_DATABASE_URL" "crits-db-YYYY-MM-DD.dump"
 ```
 
-The included Docker deployment stores images in the named volume `crits_media`. Back that volume up to encrypted off-host storage. A backup is not verified until both the database and media have been restored and checked in a separate environment.
+A backup is not verified until both database records and uploaded media have been restored and checked in a separate environment.
 
 ## Operational limitations to disclose
 

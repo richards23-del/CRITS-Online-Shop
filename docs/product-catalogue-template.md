@@ -18,8 +18,6 @@ Download the empty template from **Admin → Import & export**. It contains only
 | `availability` | Required: `available`, `quote`, or `out_of_stock`. |
 | `stockQuantity` | Optional non-negative whole number. |
 | `sku` | Optional staff SKU. |
-| `sourceListingUrl` | Optional source URL for staff reference. Do not copy Jiji content without permission. |
-| `sourceVerifiedAt` | Optional date in `YYYY-MM-DD` format. |
 | `status` | Optional: `draft` or `archived`. Imports cannot publish products. |
 | `featured` | Optional `true` or `false`. |
 
@@ -29,8 +27,12 @@ The importer supports quoted CSV fields and doubled quotation marks. If a JSON v
 "Laptop","laptop-01","Brand","Model",3,new,"Approved copy","{""Memory"":""16 GB""}","[""https://example.com/image.jpg""]",,quote,,SKU-1,,,,draft,false
 ```
 
-The example above documents formatting only; it is not a CRITS catalogue record. Confirm every product, category, image, source, price, and availability with CRITS before importing. CSV imports are staff-only, require a confirmation, and create non-public records for review.
+The example above documents formatting only; it is not a CRITS catalogue record. Confirm every product, category, image, price, and availability with CRITS before importing. CSV imports are staff-only, require a confirmation, and create non-public records for review.
+
+## PDF export
+
+The Admin Products page and Import / export page both provide **Export PDF**. The button opens a print-ready catalogue in a new window; choose **Save as PDF** in the browser print dialog. Allow pop-ups for the site if the window does not open. The PDF includes product descriptions and specifications, and excludes source URLs and customer enquiry details.
 
 ## Export
 
-The catalogue export uses the same headings and includes source URLs, verification dates, specifications, image URLs, status, and featured state. It contains catalogue records only, not customer enquiry details. It can be imported again after review; `published` is deliberately not accepted by the importer.
+The catalogue export uses the same headings and includes specifications, image URLs, status, and featured state. Source URLs and verification metadata are excluded. The export contains catalogue records only, not customer enquiry details. It can be imported again after review; `published` is deliberately not accepted by the importer.

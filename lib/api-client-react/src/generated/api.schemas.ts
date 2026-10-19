@@ -36,6 +36,127 @@ export const ProductStatus = {
   archived: 'archived',
 } as const;
 
+export type PropertyStatus = typeof PropertyStatus[keyof typeof PropertyStatus];
+
+
+export const PropertyStatus = {
+  draft: 'draft',
+  published: 'published',
+  archived: 'archived',
+} as const;
+
+export interface Property {
+  id: number;
+  slug: string;
+  title: string;
+  location: string;
+  landArea: string;
+  description: string;
+  imageUrls: string[];
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  priceUgx?: number | null;
+  /** @nullable */
+  sourceListingUrl?: string | null;
+  /** @nullable */
+  sourceVerifiedAt?: string | null;
+  status: PropertyStatus;
+  featured: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyPage {
+  items: Property[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface PropertyInput {
+  /**
+     * @minLength 1
+     * @maxLength 180
+     */
+  slug: string;
+  /**
+     * @minLength 1
+     * @maxLength 220
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  location: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  landArea: string;
+  /** @maxLength 10000 */
+  description: string;
+  /**
+     * @maxItems 12
+     * @items.maxLength 1000
+     */
+  imageUrls: string[];
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  priceUgx?: number | null;
+  /** @nullable */
+  sourceListingUrl?: string | null;
+  /** @nullable */
+  sourceVerifiedAt?: string | null;
+  status: PropertyStatus;
+  featured: boolean;
+}
+
+export interface PropertyUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 180
+     */
+  slug?: string;
+  /**
+     * @minLength 1
+     * @maxLength 220
+     */
+  title?: string;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  location?: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  landArea?: string;
+  /** @maxLength 10000 */
+  description?: string;
+  /**
+     * @maxItems 12
+     * @items.maxLength 1000
+     */
+  imageUrls?: string[];
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  priceUgx?: number | null;
+  /** @nullable */
+  sourceListingUrl?: string | null;
+  /** @nullable */
+  sourceVerifiedAt?: string | null;
+  status?: PropertyStatus;
+  featured?: boolean;
+}
+
 export type EnquiryStatus = typeof EnquiryStatus[keyof typeof EnquiryStatus];
 
 
@@ -499,8 +620,34 @@ export const ListProductsSort = {
   popular: 'popular',
 } as const;
 
+export type ListPropertiesParams = {
+/**
+ * @maxLength 120
+ */
+q?: string;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 48
+ */
+pageSize?: number;
+};
+
 export type ListAdminProductsParams = {
 status?: ProductStatus;
+/**
+ * @maxLength 120
+ */
+q?: string;
+};
+
+export type ListAdminPropertiesParams = {
+status?: PropertyStatus;
+page?: number;
+pageSize?: number;
 /**
  * @maxLength 120
  */

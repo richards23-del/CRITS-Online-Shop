@@ -16,6 +16,8 @@ import {
   CheckAdminAccessResponse,
   CreateAdminCategoryBody,
   CreateAdminCategoryResponse,
+  CreateAdminPropertyBody,
+  CreateAdminPropertyResponse,
   CreateAdminProductBody,
   CreateAdminProductResponse,
   GetAdminOverviewResponse,
@@ -27,6 +29,8 @@ import {
   ListAdminEnquiriesResponse,
   ListAdminProductsQueryParams,
   ListAdminProductsResponse,
+  ListAdminPropertiesQueryParams,
+  ListAdminPropertiesResponse,
   UpdateAdminCategoryBody,
   UpdateAdminCategoryParams,
   UpdateAdminCategoryResponse,
@@ -36,6 +40,9 @@ import {
   UpdateAdminProductBody,
   UpdateAdminProductParams,
   UpdateAdminProductResponse,
+  UpdateAdminPropertyBody,
+  UpdateAdminPropertyParams,
+  UpdateAdminPropertyResponse,
   UpdateAdminSettingsBody,
   UpdateAdminSettingsResponse,
 } from "@workspace/api-zod";
@@ -46,6 +53,7 @@ import {
   enquiriesTable,
   enquiryItemsTable,
   productsTable,
+  propertiesTable,
   privacySettingsTable,
 } from "@workspace/db";
 import { getConfiguredAdminIds, requireAdmin } from "../middlewares/requireAdmin";
@@ -59,6 +67,8 @@ function adminProduct(
 ) {
   return {
     ...product,
+    sourceListingUrl: null,
+    sourceVerifiedAt: null,
     categoryName,
     specifications: product.specifications ?? {},
     imageUrls: product.imageUrls ?? [],
@@ -70,8 +80,20 @@ function productInputForDatabase(
 ) {
   return {
     ...input,
+    sourceListingUrl: null,
     sourceVerifiedAt:
       input.sourceVerifiedAt?.toISOString().slice(0, 10) ?? null,
+  };
+}
+
+function propertyInputForDatabase(
+  input: ReturnType<typeof CreateAdminPropertyBody.parse>,
+) {
+  const { sourceVerifiedAt, ...rest } = input;
+  return {
+    ...rest,
+    sourceListingUrl: null,
+    sourceVerifiedAt: sourceVerifiedAt?.toISOString().slice(0, 10) ?? null,
   };
 }
 
@@ -292,11 +314,11 @@ router.post("/admin/products", async (req, res): Promise<void> => {
   const input = parsed.data;
   if (
     !validSlug(input.slug) ||
-    !validHttpUrl(input.sourceListingUrl) ||
-    !input.imageUrls.every(validImageUrl)
+    !input.imageUrls.every(validImageUrl) ||
+    (input.status === "published" && input.imageUrls.length === 0)
   ) {
     res.status(400).json({
-      error: "Use a safe URL and a lowercase, hyphenated product slug.",
+      error: "Use a safe URL and a lowercase, hyphenated product slug. Published products require at least one product photo.",
     });
     return;
   }
@@ -344,7 +366,6 @@ router.post("/admin/products/import", async (req, res): Promise<void> => {
     products.some(
       (product) =>
         !validSlug(product.slug) ||
-        !validHttpUrl(product.sourceListingUrl) ||
         !product.imageUrls.every(validImageUrl),
     )
   ) {
@@ -414,12 +435,13 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
 
   const nextCategoryId = parsed.data.categoryId ?? current.categoryId;
   const nextSlug = parsed.data.slug ?? current.slug;
+  const nextImages = parsed.data.imageUrls ?? current.imageUrls;
   if (
     (parsed.data.slug !== undefined && !validSlug(nextSlug)) ||
-    !validHttpUrl(parsed.data.sourceListingUrl ?? current.sourceListingUrl) ||
-    !(parsed.data.imageUrls ?? current.imageUrls).every(validImageUrl)
+    !nextImages.every(validImageUrl) ||
+    (parsed.data.status === "published" && nextImages.length === 0)
   ) {
-    res.status(400).json({ error: "Use a safe URL and a lowercase, hyphenated product slug." });
+    res.status(400).json({ error: "Use a safe URL and a lowercase, hyphenated product slug. Published products require at least one product photo." });
     return;
   }
   if (!(await categoryExists(nextCategoryId))) {
@@ -435,11 +457,13 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   }
 
   try {
-    const { sourceVerifiedAt, ...updates } = parsed.data;
+    const updates = { ...parsed.data };
+    delete updates.sourceListingUrl;
+    const { sourceVerifiedAt, ...productUpdates } = updates;
     await db
       .update(productsTable)
       .set({
-        ...updates,
+        ...productUpdates,
         ...(sourceVerifiedAt !== undefined
           ? {
               sourceVerifiedAt:
@@ -459,6 +483,157 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
       error.code === "23505"
     ) {
       res.status(409).json({ error: "That product slug is already in use." });
+      return;
+    }
+    throw error;
+  }
+});
+
+router.get("/admin/properties", async (req, res): Promise<void> => {
+  const parsed = ListAdminPropertiesQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const filters = [];
+  if (parsed.data.status) {
+    filters.push(eq(propertiesTable.status, parsed.data.status));
+  }
+  if (parsed.data.q) {
+    const term = `%${parsed.data.q.replace(/[\\%_]/g, "\\$&" )}%`;
+    filters.push(
+      or(
+        ilike(propertiesTable.title, term),
+        ilike(propertiesTable.location, term),
+        ilike(propertiesTable.landArea, term),
+      )!,
+    );
+  }
+  const where = filters.length > 0 ? and(...filters) : undefined;
+  const [{ value: total }] = await db
+    .select({ value: count() })
+    .from(propertiesTable)
+    .where(where);
+  const properties = await db
+    .select()
+    .from(propertiesTable)
+    .where(where)
+    .orderBy(desc(propertiesTable.updatedAt), desc(propertiesTable.id))
+    .limit(parsed.data.pageSize)
+    .offset((parsed.data.page - 1) * parsed.data.pageSize);
+  res.json(ListAdminPropertiesResponse.parse({
+    items: properties.map((property) => ({
+      ...property,
+      sourceListingUrl: null,
+      sourceVerifiedAt: null,
+    })),
+    page: parsed.data.page,
+    pageSize: parsed.data.pageSize,
+    total,
+  }));
+});
+
+router.post("/admin/properties", async (req, res): Promise<void> => {
+  const parsed = CreateAdminPropertyBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const input = parsed.data;
+  if (
+    !validSlug(input.slug) ||
+    !input.imageUrls.every(validImageUrl) ||
+    (input.status === "published" && input.imageUrls.length === 0)
+  ) {
+    res.status(400).json({ error: "Use a valid slug and image URL. Published listings require at least one property photo." });
+    return;
+  }
+  try {
+    const [created] = await db
+      .insert(propertiesTable)
+      .values(propertyInputForDatabase(input))
+      .returning();
+    res.status(201).json(CreateAdminPropertyResponse.parse({
+      ...created,
+      sourceListingUrl: null,
+      sourceVerifiedAt: null,
+    }));
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "23505"
+    ) {
+      res.status(409).json({ error: "That property slug is already in use." });
+      return;
+    }
+    throw error;
+  }
+});
+
+router.patch("/admin/properties/:id", async (req, res): Promise<void> => {
+  const params = UpdateAdminPropertyParams.safeParse(req.params);
+  const parsed = UpdateAdminPropertyBody.safeParse(req.body);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [current] = await db
+    .select()
+    .from(propertiesTable)
+    .where(eq(propertiesTable.id, params.data.id))
+    .limit(1);
+  if (!current) {
+    res.status(404).json({ error: "Property listing not found." });
+    return;
+  }
+  const nextSlug = parsed.data.slug ?? current.slug;
+  const nextImages = parsed.data.imageUrls ?? current.imageUrls;
+  if (
+    (parsed.data.slug !== undefined && !validSlug(nextSlug)) ||
+    !nextImages.every(validImageUrl) ||
+    (parsed.data.status === "published" && nextImages.length === 0)
+  ) {
+    res.status(400).json({ error: "Use a valid slug and image URL. Published listings require at least one property photo." });
+    return;
+  }
+  try {
+    const updates = { ...parsed.data };
+    delete updates.sourceListingUrl;
+    const { sourceVerifiedAt, ...propertyUpdates } = updates;
+    await db
+      .update(propertiesTable)
+      .set({
+        ...propertyUpdates,
+        ...(sourceVerifiedAt !== undefined
+          ? { sourceVerifiedAt: sourceVerifiedAt?.toISOString().slice(0, 10) ?? null }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(propertiesTable.id, params.data.id));
+    const [updated] = await db
+      .select()
+      .from(propertiesTable)
+      .where(eq(propertiesTable.id, params.data.id))
+      .limit(1);
+    res.json(UpdateAdminPropertyResponse.parse({
+      ...updated,
+      sourceListingUrl: null,
+      sourceVerifiedAt: null,
+    }));
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "23505"
+    ) {
+      res.status(409).json({ error: "That property slug is already in use." });
       return;
     }
     throw error;

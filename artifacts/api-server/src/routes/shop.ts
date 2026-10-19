@@ -20,6 +20,8 @@ import {
   GetProductParams,
   GetProductResponse,
   ListCategoriesResponse,
+  ListPropertiesQueryParams,
+  ListPropertiesResponse,
   ListProductsQueryParams,
   ListProductsResponse,
   RecordAnalyticsEventBody,
@@ -31,6 +33,7 @@ import {
   enquiriesTable,
   enquiryItemsTable,
   productsTable,
+  propertiesTable,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -264,6 +267,39 @@ router.get("/products/:slug", async (req, res): Promise<void> => {
         ),
     }),
   );
+});
+
+router.get("/properties", async (req, res): Promise<void> => {
+  const parsed = ListPropertiesQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { q, page, pageSize } = parsed.data;
+  const filters = [eq(propertiesTable.status, "published")];
+  const escapedQuery = q?.replace(/[\\%_]/g, "\\$&");
+  if (escapedQuery) {
+    filters.push(
+      or(
+        ilike(propertiesTable.title, `%${escapedQuery}%`),
+        ilike(propertiesTable.location, `%${escapedQuery}%`),
+        ilike(propertiesTable.landArea, `%${escapedQuery}%`),
+      )!,
+    );
+  }
+  const where = and(...filters);
+  const [{ value: total }] = await db
+    .select({ value: count() })
+    .from(propertiesTable)
+    .where(where);
+  const items = await db
+    .select()
+    .from(propertiesTable)
+    .where(where)
+    .orderBy(desc(propertiesTable.featured), desc(propertiesTable.updatedAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+  res.json(ListPropertiesResponse.parse({ items, page, pageSize, total }));
 });
 
 router.get("/categories", async (_req, res): Promise<void> => {
