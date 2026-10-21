@@ -1,6 +1,5 @@
 # CRITS Online Shop
 
-[![Build and typecheck](https://github.com/richarich-92/CRITS-Online-Shop/actions/workflows/ci.yml/badge.svg)](https://github.com/richarich-92/CRITS-Online-Shop/actions/workflows/ci.yml)
 
 **A catalogue and enquiry platform for technology products and real-estate listings.** The project brings product discovery and customer enquiries into one storefront, backed by an API and PostgreSQL.
 
