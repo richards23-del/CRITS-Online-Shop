@@ -1,6 +1,20 @@
 # CRITS Online Shop
 
 [![Build and typecheck](https://github.com/richards23-del/CRITS-Online-Shop/actions/workflows/ci.yml/badge.svg)](https://github.com/richards23-del/CRITS-Online-Shop/actions/workflows/ci.yml)
+
+**A catalogue and enquiry platform for technology products and real-estate listings.** The project brings product discovery and customer enquiries into one storefront, backed by an API and PostgreSQL.
+
+> **Scope clarification:** This is currently an enquiry-based storefront, not a completed e-commerce checkout. Online payments, delivery management, and order fulfilment are not configured.
+
+### Project highlights
+
+- Browse technology products and real-estate listings.
+- Build an enquiry basket and contact the business about selected listings.
+- Manage application data through a PostgreSQL-backed API.
+- Prepare for deployment with Docker Compose, HTTPS configuration, deployment preflight checks, and documented backup/recovery procedures.
+- Run automated typecheck and production-build checks through GitHub Actions.
+
+[![Build and typecheck](https://github.com/richards23-del/CRITS-Online-Shop/actions/workflows/ci.yml/badge.svg)](https://github.com/richards23-del/CRITS-Online-Shop/actions/workflows/ci.yml)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-database-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
