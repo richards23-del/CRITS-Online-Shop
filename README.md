@@ -1,31 +1,71 @@
 # CRITS Online Shop
 
-The CRITS storefront combines a technology catalogue and real estate listings. The current customer journey is enquiry based: visitors can browse products, build an enquiry basket, and contact CRITS. Online checkout, payment processing, delivery management, and order fulfillment are not configured.
+[![Build and typecheck](https://github.com/richards23-del/CRITS-Online-Shop/actions/workflows/ci.yml/badge.svg)](https://github.com/richards23-del/CRITS-Online-Shop/actions/workflows/ci.yml)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-database-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+
+CRITS Online Shop is a business storefront combining a technology catalogue with real-estate listings. Its current customer journey is **enquiry-based**: visitors browse listings, build an enquiry basket, and contact CRITS. It does not currently provide online checkout, payment processing, delivery management, or order fulfilment.
+
+## Project overview
+
+- **Application:** TypeScript workspace with a storefront and API
+- **Database:** PostgreSQL
+- **Authentication:** Clerk
+- **Deployment:** Docker Compose with Caddy for HTTPS
+- **Operations:** Environment preflight checks and documented encrypted backup/recovery procedures
+- **CI:** GitHub Actions runs the locked dependency install, typecheck, and production build on pushes and pull requests
 
 ## Run locally
 
-See [Local development](docs/local-development.md) for prerequisites, PostgreSQL setup, Clerk development configuration, and startup commands. The short version is:
+See [Local development](docs/local-development.md) for full prerequisites and configuration.
 
 1. Copy `.env.example` to `.env.local` and configure local PostgreSQL, media signing, and Clerk development values.
-2. Install dependencies with `corepack pnpm install`.
-3. Apply the local schema with `corepack pnpm --filter @workspace/db run push`.
-4. Start the API and storefront in separate terminals with `corepack pnpm run dev:api` and `corepack pnpm run dev:shop`.
-5. Open `http://127.0.0.1:25380`.
+2. Install locked workspace dependencies:
 
-## Production
+   ```sh
+   corepack pnpm install
+   ```
 
-The production stack uses Docker Compose, Caddy for HTTPS, a managed TLS-enabled PostgreSQL database, and a persistent media volume. Start with [Security and operations](docs/security-and-operations.md), [Launch checklist](docs/launch-checklist.md), and [`deploy/production.env.example`](deploy/production.env.example). Production requires live Clerk keys, approved production staff IDs, a remote encrypted Restic repository, a public domain, and a tested recovery process. The preflight checks configuration without printing secret values:
+3. Apply the local schema:
+
+   ```sh
+   corepack pnpm --filter @workspace/db run push
+   ```
+
+4. Start the API and storefront in separate terminals:
+
+   ```sh
+   corepack pnpm run dev:api
+   corepack pnpm run dev:shop
+   ```
+
+5. Open [http://127.0.0.1:25380](http://127.0.0.1:25380).
+
+## Production readiness
+
+Production uses Docker Compose, Caddy for HTTPS, a managed TLS-enabled PostgreSQL database, and persistent media storage. Start with:
+
+- [Security and operations](docs/security-and-operations.md)
+- [Launch checklist](docs/launch-checklist.md)
+- [Production environment template](deploy/production.env.example)
+
+Run the configuration preflight before deployment:
 
 ```sh
 pnpm run preflight:deploy
 ```
 
-Database changes must be reviewed and applied through versioned migrations. The `push` command is for local development only.
+Production requires live Clerk keys, approved production staff IDs, a remote encrypted Restic repository, a public domain, and a tested recovery process. Database changes must be reviewed and applied through versioned migrations; the schema `push` command is for local development only.
 
-The production repository includes a restricted Restic container plus a systemd service and daily timer for encrypted database and uploaded-media backups. Configure the private remote repository and credentials first, initialize it once, then install the timer as described in [Security and operations](docs/security-and-operations.md). Rehearse recovery into an isolated environment before launch.
+## Security basics
 
-## Repository checks
+- Never commit `.env.local`, `.env.production`, database exports, Restic passwords, or Clerk secret keys.
+- Keep production credentials in protected deployment secrets.
+- Rotate any credential accidentally exposed in a commit, even if the commit is later removed.
+- Rehearse backup restoration into an isolated environment before launch.
+- Do not treat a successful build as proof that production configuration, authentication, or recovery procedures have been fully validated.
 
-GitHub Actions installs the locked workspace dependencies and runs the typecheck and production build on pushes and pull requests. It does not access production credentials or deploy the application.
+## Contributing
 
-Never commit `.env.local`, `.env.production`, database exports, Restic passwords, or Clerk secret keys. Rotate any secret that is accidentally exposed.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes and use [SECURITY.md](SECURITY.md) to report a potential vulnerability responsibly.
