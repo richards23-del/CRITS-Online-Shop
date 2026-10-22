@@ -11,7 +11,7 @@ import {
   getListAdminPropertiesQueryKey, getListPropertiesQueryKey,
   getListCategoriesQueryKey, getListProductsQueryKey, useCheckAdminAccess, useCreateAdminCategory,
   useCreateAdminProduct, useCreateAdminProperty, useCreateEnquiry, useGetAdminOverview, useGetAdminSettings, useGetProduct,
-  useHealthCheck, useImportAdminProducts, useListAdminCategories, useListAdminEnquiries,
+  listAdminProperties, useHealthCheck, useImportAdminProducts, useListAdminCategories, useListAdminEnquiries,
   useListAdminProducts, useListAdminProperties, useListProperties, useListCategories, useListProducts, useRecordAnalyticsEvent,
   useRequestProductImageUpload, useUpdateAdminCategory, useUpdateAdminEnquiry,
   useRequestPropertyImageUpload,
@@ -88,19 +88,6 @@ type PropertyDisplay = Pick<Property, 'slug' | 'title' | 'location' | 'landArea'
   priceBasis?: string;
 };
 
-const nalyaPropertyListing: PropertyDisplay = {
-  slug: 'prime-residential-land-nalya',
-  title: 'Prime residential land in Naalya, 2.89 acres',
-  location: 'Nalyako, Naalya, Nakawa',
-  landArea: '2.89 acres',
-  description: 'Prime 2.89 acre residential land located in Nalyako, Naalya. The public listing preview confirms the location, size and asking price. Contact CRITS for the complete property information and to confirm current availability.',
-  imageUrls: [],
-  priceUgx: 3_000_000_000,
-  featured: true,
-  propertyType: 'Residential land',
-  priceBasis: 'Outright price',
-};
-
 function parseCsvDocument(text: string): string[][] {
   const input = text.replace(/^\uFEFF/, '');
   const rows: string[][] = [];
@@ -168,6 +155,56 @@ function parseJsonStringArray(value: string): string[] {
     throw new Error('Image URLs must be a JSON array of strings');
   }
   return parsed;
+}
+function isSafePropertyImageUrl(value: string): boolean {
+  if (value.startsWith('/api/storage/public-objects/')) return true;
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+type PropertyPageData = { items: Property[]; total?: number };
+function readPropertyPage(value: unknown): PropertyPageData | null {
+  let current = value;
+  let total: number | undefined;
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (Array.isArray(current)) return { items: current as Property[], total };
+    if (!current || typeof current !== 'object') return null;
+    const record = current as Record<string, unknown>;
+    if (typeof record.total === 'number' && Number.isSafeInteger(record.total) && record.total >= 0) total = record.total;
+    if (Array.isArray(record.items)) return { items: record.items as Property[], total };
+    const nested = ['data', 'properties', 'results', 'rows'].find((key) => key in record);
+    if (!nested) return null;
+    current = record[nested];
+  }
+  return null;
+}
+
+async function listAllAdminProperties(status?: Property['status']): Promise<Property[]> {
+  const pageSize = 48;
+  const properties: Property[] = [];
+  const seen = new Set<string>();
+  let page = 1;
+  let response: unknown = await listAdminProperties({ page, pageSize, status });
+  while (page <= 1000) {
+    const pageData = readPropertyPage(response);
+    if (!pageData) throw new Error('The properties API returned an unsupported list format. Refresh the staff workspace and retry.');
+    let added = 0;
+    for (const property of pageData.items) {
+      const identity = property.slug || String(property.id);
+      if (!identity || seen.has(identity)) continue;
+      seen.add(identity);
+      properties.push(property);
+      added += 1;
+    }
+    const hasMore = pageData.total === undefined ? pageData.items.length === pageSize : properties.length < pageData.total;
+    if (!hasMore || pageData.items.length === 0 || added === 0) return properties;
+    page += 1;
+    response = await listAdminProperties({ page, pageSize, status });
+  }
+  throw new Error('The properties API returned too many pages. Refresh the staff workspace and retry.');
 }
 
 function IconLink({ href, children, className = '' }: { href: string; children: ReactNode; className?: string }) {
@@ -359,9 +396,9 @@ function PropertyDetailsDialog({ property, onClose }: { property: PropertyDispla
   </dialog>;
 }
 
-function LandListingFeature({ property }: { property?: PropertyDisplay }) {
+function LandListingFeature({ property }: { property: PropertyDisplay }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const listing = property ?? nalyaPropertyListing;
+  const listing = property;
   const imageUrl = listing.imageUrls[0];
   const { title, location, landArea } = listing;
   const price = money(listing.priceUgx);
@@ -410,7 +447,7 @@ function PropertyCard({ property }: { property: Property }) {
 function Home() {
   usePageMeta('CRITS Limited | Technology and Real Estate', 'CANDID REALTORS & IT SOLUTIONS LIMITED brings business technology and strategic real estate services together.');
   const properties = useListProperties({ page: 1, pageSize: 12 });
-  const spotlight = properties.data?.items.find((property) => property.featured) ?? properties.data?.items[0] ?? nalyaPropertyListing;
+  const spotlight = properties.data?.items.find((property) => property.featured) ?? properties.data?.items[0];
   return <Shell>
     <section className="company-hero">
       <div className="company-hero-grid site-width">
@@ -447,7 +484,7 @@ function Home() {
       </div>
     </section>
 
-    <section className="company-listing-section site-width"><div className="company-section-heading"><span className="eyebrow">PROPERTY SPOTLIGHT</span><h2>{spotlight?.title ?? 'A Naalya opportunity.'}</h2><p>Review the property details and send an enquiry directly to CRITS.</p></div><LandListingFeature property={spotlight} /></section>
+    {spotlight && <section className="company-listing-section site-width"><div className="company-section-heading"><span className="eyebrow">PROPERTY SPOTLIGHT</span><h2>{spotlight.title}</h2><p>Review the property details and send an enquiry directly to CRITS.</p></div><LandListingFeature property={spotlight} /></section>}
 
     <section className="company-approach"><div className="site-width company-approach-inner"><div><span className="eyebrow">HOW WE WORK</span><h2>Good decisions start<br />with a clear brief.</h2></div><div className="company-approach-copy"><p>Whether the need is technology or land, we listen first, share relevant options and help clients take informed next steps.</p><Link href="/about">Get to know CRITS <ArrowRight size={16} /></Link></div></div></section>
     <section className="company-contact-cta site-width"><div><span className="eyebrow">LET’S TALK</span><h2>Tell us what you’re working toward.</h2><p>Discuss a technology requirement, a land opportunity or a business enquiry with our team.</p></div><div className="company-cta-actions"><Button href="/contact" variant="orange">Contact CRITS <ArrowRight size={16} /></Button><a href={replacementPhoneHref}><Phone size={15} /> {replacementPhone}</a></div></section>
@@ -461,14 +498,12 @@ function RealEstatePage() {
   const [propertyPage, setPropertyPage] = useState(() => Number.isSafeInteger(initialPropertyPage) && initialPropertyPage > 0 ? initialPropertyPage : 1);
   const properties = useListProperties({ page: propertyPage, pageSize: propertyPageSize });
   const propertyTotal = properties.data?.total ?? 0;
-  const usingNalyaFallback = !properties.isLoading && propertyTotal === 0;
-  const displayedPropertyTotal = propertyTotal || (usingNalyaFallback ? 1 : 0);
   const propertyPageCount = Math.max(1, Math.ceil(propertyTotal / propertyPageSize));
   const propertyItems = properties.data?.items ?? [];
-  const spotlight = propertyPage === 1 ? propertyItems.find((property) => property.featured) ?? propertyItems[0] ?? (usingNalyaFallback ? nalyaPropertyListing : undefined) : undefined;
+  const spotlight = propertyPage === 1 ? propertyItems.find((property) => property.featured) ?? propertyItems[0] : undefined;
   const additionalProperties = spotlight ? propertyItems.filter((property) => property.id !== spotlight.id) : propertyItems;
-  const firstProperty = displayedPropertyTotal ? ((propertyPage - 1) * propertyPageSize) + 1 : 0;
-  const lastProperty = Math.min(propertyPage * propertyPageSize, displayedPropertyTotal);
+  const firstProperty = propertyTotal ? ((propertyPage - 1) * propertyPageSize) + 1 : 0;
+  const lastProperty = Math.min(propertyPage * propertyPageSize, propertyTotal);
   const lastNavigatedPropertyPage = useRef(propertyPage);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -517,13 +552,13 @@ function RealEstatePage() {
     <section className="estate-process"><div className="site-width"><div className="company-section-heading"><span className="eyebrow">OUR APPROACH</span><h2>Clear steps. Careful decisions.</h2></div><div className="estate-process-grid">{landProcess.map(([number, title, description]) => <article key={number}><span>{number}</span><h3>{title}</h3><p>{description}</p></article>)}</div><p className="estate-professional-note"><ShieldCheck size={18} /> Land transactions require independent verification. Legal, surveying and specialist work should be handled by qualified professionals or competent authorities.</p></div></section>
     <section className="estate-vision site-width"><article><span className="eyebrow">OUR VISION</span><h2>A trusted land investment partner.</h2><p>To connect valuable land opportunities with responsible investment, productive development and lasting value in Uganda.</p></article><article><span className="eyebrow">OUR MISSION</span><h2>Professional facilitation for informed investment.</h2><p>To connect property owners, investors, developers and institutions through reliable service, informed engagement and integrity.</p></article><article><span className="eyebrow">OUR VALUES</span><h2>Integrity in every engagement.</h2><p>Professionalism, client focus, market awareness, confidentiality and lasting partnerships guide our work.</p></article></section>
     <section className="company-listing-section site-width property-results-section" id="property-results" tabIndex={-1}>
-      <div className="company-section-heading"><span className="eyebrow">CRITS LAND DEPARTMENT</span><h2>Property opportunities.</h2><p>Browse current listings and contact CRITS directly to confirm availability and arrange more information.</p></div>
+      <div className="company-section-heading"><span className="eyebrow">CRITS LAND DEPARTMENT</span><h2>Property opportunities.</h2><p>Browse published property listings and contact CRITS directly to confirm availability and arrange more information.</p></div>
       {properties.isLoading ? <div className="property-grid">{[1, 2, 3].map((item) => <div className="property-card-skeleton" key={item}><div className="skeleton-img" /><div className="skeleton-line" /><div className="skeleton-line short" /></div>)}</div>
-        : properties.isError ? <><LandListingFeature property={nalyaPropertyListing} /><QueryFailure retry={() => properties.refetch()} /></>
-          : propertyItems.length || usingNalyaFallback ? <>
+        : properties.isError ? <div className="property-refresh-alert" role="status"><p><b>Property listings could not be loaded.</b> Please try again shortly.</p><button className="text-button" onClick={() => void properties.refetch()} disabled={properties.isFetching}>{properties.isFetching ? 'Refreshing…' : 'Retry listings'} <ArrowRight size={15} /></button></div>
+          : propertyItems.length ? <>
             {spotlight && <LandListingFeature property={spotlight} />}
             {!!additionalProperties.length && <div className="property-grid">{additionalProperties.map((property) => <PropertyCard key={property.id} property={property} />)}</div>}
-            <div className="property-result-bar" aria-live="polite"><span>{usingNalyaFallback ? 'One property opportunity is shown. Confirm availability with CRITS.' : `Showing ${firstProperty} to ${lastProperty} of ${propertyTotal} ${propertyTotal === 1 ? 'property' : 'properties'}`}</span><span>Page {propertyPage} of {propertyPageCount}</span></div>
+            <div className="property-result-bar" aria-live="polite"><span>Showing {firstProperty} to {lastProperty} of {propertyTotal} {propertyTotal === 1 ? 'property' : 'properties'}</span><span>Page {propertyPage} of {propertyPageCount}</span></div>
             {propertyPageCount > 1 && <nav className="catalog-pagination" aria-label="Property listings pagination"><button type="button" className="pagination-step" onClick={() => navigateToPropertyPage(propertyPage - 1)} disabled={propertyPage <= 1} aria-label="Go to previous property page">Previous</button>{pageSequence(propertyPage, propertyPageCount).map((item, index) => item === 'ellipsis' ? <span key={`ellipsis-${index}`} className="pagination-ellipsis" aria-hidden="true">…</span> : <button type="button" key={item} className="pagination-number" onClick={() => navigateToPropertyPage(item)} aria-label={`Go to property page ${item}`} aria-current={propertyPage === item ? 'page' : undefined}>{item}</button>)}<button type="button" className="pagination-step" onClick={() => navigateToPropertyPage(propertyPage + 1)} disabled={propertyPage >= propertyPageCount} aria-label="Go to next property page">Next</button></nav>}
           </>
             : <div className="empty-catalog large"><div className="empty-mark"><Building2 size={28} /></div><div><span className="eyebrow">PROPERTY LISTINGS</span><h3>No current public listings.</h3><p>Tell our team what location and property type you’re looking for, and we’ll help you explore suitable opportunities.</p><Button href="/contact" variant="outline">Enquire with CRITS <ArrowRight size={15} /></Button></div></div>}
@@ -871,7 +906,12 @@ function Admin() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [propertyForm, setPropertyForm] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
-  const [prefillNalyaProperty, setPrefillNalyaProperty] = useState(false);
+  const [propertyImportPending, setPropertyImportPending] = useState(false);
+  const [propertyBulkPending, setPropertyBulkPending] = useState(false);
+  const [productBulkPending, setProductBulkPending] = useState(false);
+  const [productPublicationOrder, setProductPublicationOrder] = useState<'published-first' | 'unpublished-first'>('published-first');
+  const [categorySetupPending, setCategorySetupPending] = useState(false);
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<number[]>([]);
   const [propertyPage, setPropertyPage] = useState(1);
   const [propertySearch, setPropertySearch] = useState('');
   const [appliedPropertySearch, setAppliedPropertySearch] = useState('');
@@ -894,6 +934,23 @@ function Admin() {
   const allowed = !!access.data?.allowed;
   const overview = useGetAdminOverview({ query: { enabled: allowed, queryKey: getGetAdminOverviewQueryKey() } });
   const adminProducts = useListAdminProducts(undefined, { query: { enabled: allowed, queryKey: getListAdminProductsQueryKey() } });
+  const draftProducts = (adminProducts.data ?? []).filter((product) => product.status === 'draft');
+  const publishedProductCount = (adminProducts.data ?? []).filter((product) => product.status === 'published').length;
+  const unpublishedProductCount = (adminProducts.data ?? []).length - publishedProductCount;
+  const sortedAdminProducts = useMemo(() => {
+    const products = [...(adminProducts.data ?? [])];
+    return products.sort((a, b) => {
+      const aUnpublished = a.status === 'published' ? 0 : 1;
+      const bUnpublished = b.status === 'published' ? 0 : 1;
+      const publicationOrder = productPublicationOrder === 'published-first'
+        ? aUnpublished - bUnpublished
+        : bUnpublished - aUnpublished;
+      if (publicationOrder !== 0) return publicationOrder;
+      const statusOrder = (a.status === 'draft' ? 0 : a.status === 'archived' ? 1 : 0)
+        - (b.status === 'draft' ? 0 : b.status === 'archived' ? 1 : 0);
+      return statusOrder || a.title.localeCompare(b.title);
+    });
+  }, [adminProducts.data, productPublicationOrder]);
   const adminPropertyPageSize = 10;
   const adminPropertyFilters = useMemo(() => ({
     q: appliedPropertySearch || undefined,
@@ -902,13 +959,28 @@ function Admin() {
     pageSize: adminPropertyPageSize,
   }), [appliedPropertySearch, propertyStatus, propertyPage]);
   const adminProperties = useListAdminProperties(adminPropertyFilters, { query: { enabled: allowed, queryKey: getListAdminPropertiesQueryKey(adminPropertyFilters) } });
-  const adminPropertyTotal = adminProperties.data?.total ?? 0;
+  const adminPropertyPageData = readPropertyPage(adminProperties.data);
+  const adminPropertiesResponseInvalid = adminProperties.data != null && !adminPropertyPageData;
+  const adminPropertyTotal = adminPropertyPageData?.total ?? adminPropertyPageData?.items.length ?? 0;
   const adminPropertyPageCount = Math.max(1, Math.ceil(adminPropertyTotal / adminPropertyPageSize));
-  const adminPropertyItems = adminProperties.data?.items ?? [];
+  const adminPropertyItems = adminPropertyPageData?.items ?? [];
   useEffect(() => {
     if (propertyPage > adminPropertyPageCount) setPropertyPage(adminPropertyPageCount);
   }, [propertyPage, adminPropertyPageCount]);
+  useEffect(() => {
+    setSelectedPropertyIds([]);
+  }, [propertyPage, appliedPropertySearch, propertyStatus]);
   const adminCategories = useListAdminCategories({ query: { enabled: allowed, queryKey: getListAdminCategoriesQueryKey() } });
+  const suggestedProductCategories = [
+    { name: 'Other Listings', slug: 'other-listings', description: 'Additional marketplace listings managed under IT Solutions.' },
+    { name: 'IT Services', slug: 'it-services', description: 'Printer, copier and scanner servicing, repairs and related IT support.' },
+  ];
+  const missingSuggestedProductCategories = suggestedProductCategories.filter((suggested) =>
+    !(adminCategories.data ?? []).some((category) =>
+      category.slug.trim().toLowerCase() === suggested.slug
+      || category.name.trim().toLowerCase() === suggested.name.toLowerCase(),
+    ),
+  );
   const enquiryFilters = useMemo(() => ({
     q: enquirySearch.trim() || undefined,
     status: enquiryStatus || undefined,
@@ -1003,6 +1075,64 @@ function Admin() {
       },
     );
   };
+  const publishAllDraftProducts = async () => {
+    if (productBulkPending) return;
+    if (!draftProducts.length) {
+      setMessage('There are no draft products to publish.');
+      return;
+    }
+    const missingPhotos = draftProducts.filter((product) => product.imageUrls.length === 0);
+    if (missingPhotos.length) {
+      setMessage('Cannot publish all drafts: ' + missingPhotos.length + ' product(s) need at least one photo. Add photos before publishing.');
+      return;
+    }
+    if (!window.confirm('Publish all ' + draftProducts.length + ' draft product(s)? They will appear in the public IT Solutions catalogue.')) return;
+
+    setProductBulkPending(true);
+    let publishedCount = 0;
+    let failureCount = 0;
+    try {
+      for (let offset = 0; offset < draftProducts.length; offset += 8) {
+        const batch = draftProducts.slice(offset, offset + 8);
+        const results = await Promise.allSettled(batch.map((product) => updateProduct.mutateAsync({
+          id: product.id,
+          data: { status: 'published' },
+        })));
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') publishedCount += 1;
+          else failureCount += 1;
+        });
+      }
+      void refreshAdmin();
+      setMessage(failureCount
+        ? 'Published ' + publishedCount + ' of ' + draftProducts.length + ' draft products. ' + failureCount + ' failed; review those rows and retry.'
+        : 'Published all ' + publishedCount + ' draft product(s).');
+    } finally {
+      setProductBulkPending(false);
+    }
+  };
+  const createMissingProductCategories = async () => {
+    if (categorySetupPending) return;
+    if (!missingSuggestedProductCategories.length) {
+      setMessage('All suggested product categories already exist.');
+      return;
+    }
+    setCategorySetupPending(true);
+    let createdCount = 0;
+    try {
+      for (const category of missingSuggestedProductCategories) {
+        await createCategory.mutateAsync({ data: { ...category, active: true } });
+        createdCount += 1;
+      }
+      void refreshAdmin();
+      setMessage('Created ' + createdCount + ' missing product categor' + (createdCount === 1 ? 'y.' : 'ies.'));
+    } catch {
+      void refreshAdmin();
+      setMessage('Created ' + createdCount + ' categor' + (createdCount === 1 ? 'y' : 'ies') + '. The remaining category could not be created; check for a duplicate slug and retry.');
+    } finally {
+      setCategorySetupPending(false);
+    }
+  };
   const submitProperty = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
@@ -1022,7 +1152,6 @@ function Admin() {
     const onSuccess = () => {
       setPropertyForm(false);
       setEditingProperty(null);
-      setPrefillNalyaProperty(false);
       setUploadedPropertyUrls([]);
       if (!editingProperty) {
         setPropertyPage(1);
@@ -1037,9 +1166,177 @@ function Admin() {
     if (editingProperty) updateProperty.mutate({ id: editingProperty.id, data: input }, { onSuccess, onError });
     else createProperty.mutate({ data: input }, { onSuccess, onError });
   };
+  const importPropertyCsv = async (file?: File) => {
+    if (!file) return;
+    setPropertyImportPending(true);
+    try {
+      const rows = parseCsvDocument(await file.text());
+      if (rows.length < 2) throw new Error('Add at least one property row after the header.');
+      const headers = rows[0].map((value) => value.trim());
+      if (new Set(headers).size !== headers.length) throw new Error('The CSV contains duplicate column names.');
+      const required = ['title', 'location', 'landArea'];
+      if (required.some((header) => !headers.includes(header))) {
+        throw new Error('The CSV needs these columns: title, location, landArea.');
+      }
+      const parsedRows = rows.slice(1).map((cells, index) => {
+        const row = Object.fromEntries(headers.map((header, column) => [header, cells[column] ?? ''])) as Record<string, string>;
+        const cell = (key: string) => row[key]?.trim() ?? '';
+        const title = cell('title');
+        const location = cell('location');
+        const landArea = cell('landArea');
+        const description = cell('description');
+        const slug = cell('slug') || slugify(title);
+        if (!title || title.length > 220 || !location || location.length > 240 || !landArea || landArea.length > 80) {
+          throw new Error('Row ' + (index + 2) + ' needs a title, location and land area within the template limits.');
+        }
+        if (description.length > 10000) throw new Error('Row ' + (index + 2) + ' has a description longer than 10,000 characters.');
+        if (slug.length > 180 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+          throw new Error('Row ' + (index + 2) + ' needs a lowercase slug separated by hyphens.');
+        }
+        let imageUrls: string[];
+        try {
+          imageUrls = parseJsonStringArray(cell('imageUrls'));
+        } catch {
+          throw new Error('Row ' + (index + 2) + ' needs imageUrls as a JSON array of URLs.');
+        }
+        if (imageUrls.length > 12 || imageUrls.some((url) => url.length > 1000 || !isSafePropertyImageUrl(url))) {
+          throw new Error('Row ' + (index + 2) + ' has an invalid photo URL or more than 12 photos.');
+        }
+        const rawPrice = cell('priceUgx');
+        const priceUgx = rawPrice ? Number(rawPrice) : null;
+        if (priceUgx !== null && (!Number.isSafeInteger(priceUgx) || priceUgx < 0)) {
+          throw new Error('Row ' + (index + 2) + ' has an invalid UGX price.');
+        }
+        const rawStatus = cell('status').toLowerCase();
+        if (rawStatus && rawStatus !== 'draft' && rawStatus !== 'archived') {
+          throw new Error('Row ' + (index + 2) + ' must be draft or archived; CSV imports cannot publish properties.');
+        }
+        const rawFeatured = cell('featured').toLowerCase();
+        if (rawFeatured && rawFeatured !== 'true' && rawFeatured !== 'false') {
+          throw new Error('Row ' + (index + 2) + ' needs featured to be true or false.');
+        }
+        return {
+          rowNumber: index + 2,
+          data: {
+            title,
+            slug,
+            location,
+            landArea,
+            description,
+            imageUrls,
+            priceUgx,
+            status: rawStatus === 'archived' ? 'archived' as const : 'draft' as const,
+            featured: rawFeatured === 'true',
+          } satisfies PropertyInput,
+        };
+      });
+      const existing = await listAllAdminProperties();
+      const usedSlugs = new Set(existing.map((property) => property.slug));
+      const seenSlugs = new Set<string>();
+      let duplicateCount = 0;
+      const candidates = parsedRows.filter((row) => {
+        if (usedSlugs.has(row.data.slug) || seenSlugs.has(row.data.slug)) {
+          duplicateCount += 1;
+          return false;
+        }
+        seenSlugs.add(row.data.slug);
+        return true;
+      });
+      if (!candidates.length) {
+        setMessage('No new property listings to import. ' + duplicateCount + ' duplicate slug(s) were skipped.');
+        return;
+      }
+      if (!window.confirm('Import ' + candidates.length + ' property listing(s) as drafts for staff review? Existing listings with the same slug will be skipped.')) return;
+      let importedCount = 0;
+      for (const row of candidates) {
+        try {
+          await createProperty.mutateAsync({ data: row.data });
+          importedCount += 1;
+        } catch (error) {
+          if (importedCount > 0) {
+            setPropertyPage(1);
+            setPropertySearch('');
+            setAppliedPropertySearch('');
+            setPropertyStatus('');
+            setSelectedPropertyIds([]);
+            void refreshAdmin();
+          }
+          const detail = error instanceof Error ? ' ' + error.message : '';
+          setMessage('Imported ' + importedCount + ' of ' + candidates.length + ' properties. Import stopped at CSV row ' + row.rowNumber + '.' + detail + ' Retry is safe; existing slugs are skipped.');
+          return;
+        }
+      }
+      setPropertyPage(1);
+      setPropertySearch('');
+      setAppliedPropertySearch('');
+      setPropertyStatus('');
+      setSelectedPropertyIds([]);
+      setMessage('Imported ' + importedCount + ' property listing(s) as drafts. Skipped ' + duplicateCount + ' duplicate slug(s).');
+      void refreshAdmin();
+    } catch (error) {
+      setMessage(error instanceof Error ? 'Property CSV import stopped: ' + error.message : 'Unable to read this CSV file.');
+    } finally {
+      setPropertyImportPending(false);
+    }
+  };
+  const publishPropertyBatch = async (loadProperties: () => Promise<Property[]>, scope: 'selected' | 'all drafts') => {
+    if (propertyBulkPending) return;
+    setPropertyBulkPending(true);
+    try {
+      const properties = await loadProperties();
+      if (!properties.length) {
+        setMessage(scope === 'selected' ? 'Select at least one property to publish.' : 'There are no draft property listings to publish.');
+        return;
+      }
+      const missingPhotos = properties.filter((property) => property.imageUrls.length === 0);
+      if (missingPhotos.length) {
+        setMessage('Cannot publish ' + properties.length + ' listing(s): ' + missingPhotos.length + ' need at least one photo. Add photos before publishing.');
+        return;
+      }
+      const confirmation = scope === 'all drafts'
+        ? 'Publish all ' + properties.length + ' draft property listing(s)? They will appear on the public Real Estate page.'
+        : 'Publish ' + properties.length + ' selected property listing(s)? They will appear on the public Real Estate page.';
+      if (!window.confirm(confirmation)) return;
+      let publishedCount = 0;
+      let failureCount = 0;
+      for (let offset = 0; offset < properties.length; offset += 8) {
+        const batch = properties.slice(offset, offset + 8);
+        const results = await Promise.allSettled(batch.map((property) => updateProperty.mutateAsync({
+          id: property.id,
+          data: { status: 'published' },
+        })));
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') publishedCount += 1;
+          else failureCount += 1;
+        });
+      }
+      setSelectedPropertyIds([]);
+      void refreshAdmin();
+      setMessage(failureCount
+        ? 'Published ' + publishedCount + ' of ' + properties.length + ' listings. ' + failureCount + ' could not be published; review those rows and try again.'
+        : 'Published ' + publishedCount + ' property listing(s).');
+    } catch {
+      setMessage('Unable to load property listings for bulk publishing. Please retry.');
+    } finally {
+      setPropertyBulkPending(false);
+    }
+  };
+  const publishSelectedProperties = () => {
+    const selected = new Set(selectedPropertyIds);
+    const properties = adminPropertyItems.filter((property) => selected.has(property.id) && property.status !== 'published');
+    return publishPropertyBatch(async () => properties, 'selected');
+  };
+  const publishAllDraftProperties = () => publishPropertyBatch(
+    () => listAllAdminProperties('draft'),
+    'all drafts',
+  );
+  const selectablePropertyIds = adminPropertyItems
+    .filter((property) => property.status !== 'published')
+    .map((property) => property.id);
+  const allVisiblePropertiesSelected = selectablePropertyIds.length > 0
+    && selectablePropertyIds.every((id) => selectedPropertyIds.includes(id));
   const editPropertyListing = (property: Property) => {
     setEditingProperty(property);
-    setPrefillNalyaProperty(false);
     setUploadedPropertyUrls([]);
     setPropertyForm(true);
   };
@@ -1348,37 +1645,55 @@ function Admin() {
           <label>Publication status<select name="status" defaultValue={editingProduct?.status ?? 'draft'}><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></label>
           <label className="check-field"><input type="checkbox" name="featured" defaultChecked={editingProduct?.featured ?? false} /> Feature on public home</label>
         </div><button className="button button-primary" type="submit" disabled={createProduct.isPending || updateProduct.isPending || uploadImage.isPending}>{createProduct.isPending || updateProduct.isPending ? 'Saving…' : editingProduct ? 'Update product' : 'Save product'} <Check size={15} /></button></form>}
-        <div className="admin-panel table-panel"><div className="panel-title"><div><span className="eyebrow">ALL RECORDS</span><h2>Catalogue</h2></div><div className="catalog-export-actions"><Button onClick={exportCsv} variant="outline" disabled={!adminProducts.data?.length}><ArrowDownToLine size={15} /> Export CSV</Button><Button onClick={exportPdf} variant="outline" disabled={!adminProducts.data?.length}><FileText size={15} /> Export PDF</Button></div></div>{adminProducts.isLoading ? <div className="skeleton-table" /> : adminProducts.isError ? <QueryFailure retry={() => adminProducts.refetch()} /> : adminProducts.data?.length ? <div className="table-scroll"><table><thead><tr><th>Product</th><th>Photo</th><th>Category</th><th>Condition</th><th>Status</th><th>Availability</th><th>Actions</th></tr></thead><tbody>{adminProducts.data.map((p) => <tr key={p.id} data-testid={`row-admin-product-${p.id}`}><td><b>{p.title}</b><small>{p.brand || p.model || p.sku || 'Not provided'}</small></td><td><span className={p.imageUrls.length ? 'admin-photo-present' : 'admin-photo-needed'}>{p.imageUrls.length ? `${p.imageUrls.length} photo${p.imageUrls.length === 1 ? '' : 's'}` : 'Photo needed · Edit to upload'}</span></td><td>{p.categoryName}</td><td>{human(p.condition)}</td><td><StatusPill value={p.status} /></td><td>{human(p.availability)}</td><td><div className="admin-row-actions"><button className="small-action" onClick={() => editCatalogueProduct(p)} data-testid={`button-edit-product-${p.id}`}>Edit</button>{p.status === 'published' ? <button className="small-action" onClick={() => changeProductStatus(p, 'draft')} data-testid={`button-unpublish-product-${p.id}`}>Unpublish</button> : p.status === 'archived' ? <button className="small-action" onClick={() => changeProductStatus(p, 'draft')} data-testid={`button-restore-product-${p.id}`}>Restore</button> : <button className="small-action" onClick={() => changeProductStatus(p, 'published')} data-testid={`button-publish-product-${p.id}`}>Publish</button>}{p.status !== 'archived' && <button className="small-action danger-action" onClick={() => changeProductStatus(p, 'archived')}>Archive</button>}</div></td></tr>)}</tbody></table></div> : <AdminEmpty icon={Package} title="No product records yet" copy="Create an approved product record to begin building the catalogue." action={<button className="text-button" onClick={() => setProductForm(true)}>Add a product <Plus size={15} /></button>} />}</div>
+        <div className="admin-panel table-panel"><div className="panel-title"><div><span className="eyebrow">ALL RECORDS</span><h2>Catalogue</h2><p>Only draft products are included in bulk publishing. Published and archived products stay unchanged.</p></div><div className="catalog-export-actions"><Button onClick={() => void publishAllDraftProducts()} variant="primary" disabled={adminProducts.isLoading || adminProducts.isError || productBulkPending || !draftProducts.length} testid="button-publish-all-products"><BadgeCheck size={15} /> {productBulkPending ? 'Publishing…' : `Publish all drafts${draftProducts.length ? ` (${draftProducts.length})` : ''}`}</Button><Button onClick={exportCsv} variant="outline" disabled={!adminProducts.data?.length}><ArrowDownToLine size={15} /> Export CSV</Button><Button onClick={exportPdf} variant="outline" disabled={!adminProducts.data?.length}><FileText size={15} /> Export PDF</Button></div></div>{!adminProducts.isLoading && !adminProducts.isError && !!adminProducts.data?.length && <div className="product-status-toolbar"><label>Publication order<select aria-label="Sort products by publication status" value={productPublicationOrder} onChange={(event) => setProductPublicationOrder(event.target.value as typeof productPublicationOrder)}><option value="published-first">Published first</option><option value="unpublished-first">Unpublished first</option></select></label><span>{publishedProductCount} published · {unpublishedProductCount} unpublished (draft or archived)</span></div>}{adminProducts.isLoading ? <div className="skeleton-table" /> : adminProducts.isError ? <QueryFailure retry={() => adminProducts.refetch()} /> : adminProducts.data?.length ? <div className="table-scroll"><table><thead><tr><th>Product</th><th>Photo</th><th>Category</th><th>Condition</th><th>Status</th><th>Availability</th><th>Actions</th></tr></thead><tbody>{sortedAdminProducts.map((p) => <tr key={p.id} data-testid={`row-admin-product-${p.id}`}><td><b>{p.title}</b><small>{p.brand || p.model || p.sku || 'Not provided'}</small></td><td><span className={p.imageUrls.length ? 'admin-photo-present' : 'admin-photo-needed'}>{p.imageUrls.length ? `${p.imageUrls.length} photo${p.imageUrls.length === 1 ? '' : 's'}` : 'Photo needed · Edit to upload'}</span></td><td>{p.categoryName}</td><td>{human(p.condition)}</td><td><StatusPill value={p.status} /></td><td>{human(p.availability)}</td><td><div className="admin-row-actions"><button className="small-action" onClick={() => editCatalogueProduct(p)} data-testid={`button-edit-product-${p.id}`}>Edit</button>{p.status === 'published' ? <button className="small-action" onClick={() => changeProductStatus(p, 'draft')} data-testid={`button-unpublish-product-${p.id}`}>Unpublish</button> : p.status === 'archived' ? <button className="small-action" onClick={() => changeProductStatus(p, 'draft')} data-testid={`button-restore-product-${p.id}`}>Restore</button> : <button className="small-action" onClick={() => changeProductStatus(p, 'published')} data-testid={`button-publish-product-${p.id}`}>Publish</button>}{p.status !== 'archived' && <button className="small-action danger-action" onClick={() => changeProductStatus(p, 'archived')}>Archive</button>}</div></td></tr>)}</tbody></table></div> : <AdminEmpty icon={Package} title="No product records yet" copy="Create an approved product record to begin building the catalogue." action={<button className="text-button" onClick={() => setProductForm(true)}>Add a product <Plus size={15} /></button>} />}</div>
       </>}
-      {tab === 'properties' && <><div className="admin-title-row"><div><span className="eyebrow">REAL ESTATE MANAGEMENT</span><h1>Property listings</h1><p>Add and maintain land opportunities for the public Real Estate page.</p></div><button className="button button-primary" onClick={() => { setPropertyForm(!propertyForm); setEditingProperty(null); setPrefillNalyaProperty(false); setUploadedPropertyUrls([]); }} data-testid="button-create-property"><Plus size={16} /> Add listing</button></div>
-        {propertyForm && <form key={editingProperty?.id ?? (prefillNalyaProperty ? 'seed-nalya-property' : 'new-property')} className="admin-form-card" onSubmit={submitProperty}><div className="panel-title"><div><h2>{editingProperty ? `Edit ${editingProperty.title}` : prefillNalyaProperty ? 'Set up Naalya property listing' : 'Add real estate listing'}</h2><p>Published listings appear on the public Real Estate page. Add a matching photo before publishing.</p></div><button type="button" className="icon-button" onClick={() => { setPropertyForm(false); setEditingProperty(null); setPrefillNalyaProperty(false); setUploadedPropertyUrls([]); }} aria-label="Close form"><X size={18} /></button></div><div className="admin-form-grid">
-          <label>Listing title<input name="title" required maxLength={220} defaultValue={editingProperty?.title ?? (prefillNalyaProperty ? nalyaPropertyListing.title : '')} data-testid="input-admin-property-title" /></label>
-          <label>URL slug<input name="slug" maxLength={180} defaultValue={editingProperty?.slug ?? (prefillNalyaProperty ? nalyaPropertyListing.slug : '')} placeholder="Created from title if left blank" /></label>
-          <label>Location<input name="location" required maxLength={240} defaultValue={editingProperty?.location ?? (prefillNalyaProperty ? nalyaPropertyListing.location : '')} /></label>
-          <label>Land area<input name="landArea" required maxLength={80} defaultValue={editingProperty?.landArea ?? (prefillNalyaProperty ? nalyaPropertyListing.landArea : '')} /></label>
-          <label>Price (UGX)<input name="price" type="number" min="0" step="1" defaultValue={editingProperty?.priceUgx ?? (prefillNalyaProperty ? nalyaPropertyListing.priceUgx ?? '' : '')} /></label>
-          <label className="wide">Description<textarea name="description" rows={3} maxLength={10000} defaultValue={editingProperty?.description ?? (prefillNalyaProperty ? nalyaPropertyListing.description : '')} placeholder="Property details for public display" /></label>
+      {tab === 'properties' && <><div className="admin-title-row"><div><span className="eyebrow">REAL ESTATE MANAGEMENT</span><h1>Property listings</h1><p>Add or import property records. Only published records appear on the public Real Estate page.</p></div><button className="button button-primary" onClick={() => { setPropertyForm(!propertyForm); setEditingProperty(null); setUploadedPropertyUrls([]); }} data-testid="button-create-property"><Plus size={16} /> Add listing</button></div>
+        {propertyForm && <form key={editingProperty?.id ?? 'new-property'} className="admin-form-card" onSubmit={submitProperty}><div className="panel-title"><div><h2>{editingProperty ? `Edit ${editingProperty.title}` : 'Add real estate listing'}</h2><p>Save manually posted or imported records as drafts, then publish when ready. Add a matching photo before publishing.</p></div><button type="button" className="icon-button" onClick={() => { setPropertyForm(false); setEditingProperty(null); setUploadedPropertyUrls([]); }} aria-label="Close form"><X size={18} /></button></div><div className="admin-form-grid">
+          <label>Listing title<input name="title" required maxLength={220} defaultValue={editingProperty?.title ?? ''} data-testid="input-admin-property-title" /></label>
+          <label>URL slug<input name="slug" maxLength={180} defaultValue={editingProperty?.slug ?? ''} placeholder="Created from title if left blank" /></label>
+          <label>Location<input name="location" required maxLength={240} defaultValue={editingProperty?.location ?? ''} /></label>
+          <label>Land area<input name="landArea" required maxLength={80} defaultValue={editingProperty?.landArea ?? ''} /></label>
+          <label>Price (UGX)<input name="price" type="number" min="0" step="1" defaultValue={editingProperty?.priceUgx ?? ''} /></label>
+          <label className="wide">Description<textarea name="description" rows={3} maxLength={10000} defaultValue={editingProperty?.description ?? ''} placeholder="Property details for public display" /></label>
           <label className="wide">Photo URLs <small>One per line · uploaded photos: {uploadedPropertyUrls.length}</small><textarea name="images" rows={2} defaultValue={editingProperty?.imageUrls.join('\n') ?? ''} placeholder="Paste hosted image URLs or upload property photos" /></label>
           <label className="wide image-upload-label">Upload property photo <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => void uploadPropertyImage(e.target.files?.[0])} data-testid="input-property-image-upload" /><small>{requestPropertyImageUpload.isPending ? 'Preparing secure upload…' : 'JPG, PNG or WEBP · up to 10 MB. Use the photo from the matching listing.'}</small></label>
           {!!uploadedPropertyUrls.length && <div className="wide property-upload-preview">{uploadedPropertyUrls.map((url) => <img key={url} src={url} alt="Uploaded property preview" />)}</div>}
           <label>Publication status<select name="status" defaultValue={editingProperty?.status ?? 'draft'}><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></label>
-          <label className="check-field"><input type="checkbox" name="featured" defaultChecked={editingProperty?.featured ?? prefillNalyaProperty} /> Feature on Real Estate page</label>
+          <label className="check-field"><input type="checkbox" name="featured" defaultChecked={editingProperty?.featured ?? false} /> Feature on Real Estate page</label>
         </div><button className="button button-primary" type="submit" disabled={createProperty.isPending || updateProperty.isPending || requestPropertyImageUpload.isPending}>{createProperty.isPending || updateProperty.isPending ? 'Saving…' : editingProperty ? 'Update listing' : 'Save listing'} <Check size={15} /></button></form>}
         <div className="admin-panel table-panel property-admin-panel"><div className="panel-title"><div><span className="eyebrow">ALL RECORDS</span><h2>Real estate listings</h2></div></div>
-          <form className="property-admin-filters" onSubmit={(e) => { e.preventDefault(); setAppliedPropertySearch(propertySearch.trim()); setPropertyPage(1); }}>
+          <div className="property-admin-toolbar">
+            <div className="property-import-actions">
+              <a className="button button-outline" href={base + '/property-catalogue-template.csv'} download><ArrowDownToLine size={15} /> CSV template</a>
+              <label className={'file-picker property-import-picker' + (propertyImportPending ? ' is-disabled' : '')}>
+                <input type="file" accept=".csv,text/csv" disabled={propertyImportPending} onChange={(e) => { const file = e.currentTarget.files?.[0]; e.currentTarget.value = ''; void importPropertyCsv(file); }} data-testid="input-import-properties-csv" />
+                <Upload size={15} /> {propertyImportPending ? 'Importing properties…' : 'Import property CSV'}
+              </label>
+            </div>
+            <div className="property-bulk-actions">
+              <Button onClick={() => void publishSelectedProperties()} variant="outline" disabled={propertyBulkPending || propertyImportPending || selectedPropertyIds.length === 0} testid="button-publish-selected-properties">
+                <BadgeCheck size={15} /> {propertyBulkPending ? 'Publishing…' : 'Publish selected (' + selectedPropertyIds.length + ')'}
+              </Button>
+              <Button onClick={() => void publishAllDraftProperties()} disabled={propertyBulkPending || propertyImportPending} testid="button-publish-all-properties">
+                <BadgeCheck size={15} /> {propertyBulkPending ? 'Publishing…' : 'Publish all drafts'}
+              </Button>
+            </div>
+          </div>
+          <p className="property-import-note">CSV imports stay in draft for staff review. Use the template format; imageUrls must be a JSON array. Existing slugs are skipped.</p>
+          <form className="property-admin-filters" onSubmit={(e) => { e.preventDefault(); setSelectedPropertyIds([]); setAppliedPropertySearch(propertySearch.trim()); setPropertyPage(1); }}>
             <label>Search properties<input value={propertySearch} onChange={(e) => setPropertySearch(e.target.value)} placeholder="Title, location or land area" /></label>
-            <label>Status<select value={propertyStatus} onChange={(e) => { setPropertyStatus(e.target.value as typeof propertyStatus); setPropertyPage(1); }}><option value="">All statuses</option><option value="published">Published</option><option value="draft">Draft</option><option value="archived">Archived</option></select></label>
+            <label>Status<select value={propertyStatus} onChange={(e) => { setSelectedPropertyIds([]); setPropertyStatus(e.target.value as typeof propertyStatus); setPropertyPage(1); }}><option value="">All statuses</option><option value="published">Published</option><option value="draft">Draft</option><option value="archived">Archived</option></select></label>
             <button className="button button-outline" type="submit"><Search size={15} /> Search</button>
-            {(appliedPropertySearch || propertyStatus) && <button type="button" className="text-button" onClick={() => { setPropertySearch(''); setAppliedPropertySearch(''); setPropertyStatus(''); setPropertyPage(1); }}>Clear filters <X size={14} /></button>}
+            {(appliedPropertySearch || propertyStatus) && <button type="button" className="text-button" onClick={() => { setSelectedPropertyIds([]); setPropertySearch(''); setAppliedPropertySearch(''); setPropertyStatus(''); setPropertyPage(1); }}>Clear filters <X size={14} /></button>}
           </form>
-          {adminProperties.isLoading ? <div className="skeleton-table" /> : adminProperties.isError ? <QueryFailure retry={() => adminProperties.refetch()} /> : adminPropertyItems.length ? <>
-            <div className="table-scroll"><table><thead><tr><th>Property</th><th>Area</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead><tbody>{adminPropertyItems.map((property) => <tr key={property.id} data-testid={`row-admin-property-${property.id}`}><td><div className="property-admin-name">{property.imageUrls[0] ? <img src={property.imageUrls[0]} alt="" /> : <Building2 size={20} />}<div><b>{property.title}</b><small>{property.location}</small>{!property.imageUrls.length && <small className="admin-photo-needed">Photo needed before publishing</small>}</div></div></td><td>{property.landArea}</td><td>{money(property.priceUgx)}</td><td><StatusPill value={property.status} /></td><td><div className="admin-row-actions"><button className="small-action" onClick={() => editPropertyListing(property)} data-testid={`button-edit-property-${property.id}`}>Edit</button>{property.status === 'published' ? <button className="small-action" onClick={() => changePropertyStatus(property, 'draft')}>Unpublish</button> : property.status === 'archived' ? <button className="small-action" onClick={() => changePropertyStatus(property, 'draft')}>Restore</button> : <button className="small-action" onClick={() => changePropertyStatus(property, 'published')}>Publish</button>}{property.status !== 'archived' && <button className="small-action danger-action" onClick={() => changePropertyStatus(property, 'archived')}>Archive</button>}</div></td></tr>)}</tbody></table></div>
+          {adminProperties.isLoading ? <div className="skeleton-table" /> : adminProperties.isError || adminPropertiesResponseInvalid ? <QueryFailure retry={() => adminProperties.refetch()} /> : adminPropertyItems.length ? <>
+            <div className="table-scroll"><table><thead><tr><th><input type="checkbox" aria-label="Select all unpublished properties on this page" checked={allVisiblePropertiesSelected} disabled={!selectablePropertyIds.length || propertyBulkPending} onChange={(e) => setSelectedPropertyIds(e.target.checked ? selectablePropertyIds : [])} /></th><th>Property</th><th>Area</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead><tbody>{adminPropertyItems.map((property) => <tr key={property.id} data-testid={`row-admin-property-${property.id}`}><td><input type="checkbox" aria-label={'Select ' + property.title} checked={selectedPropertyIds.includes(property.id)} disabled={property.status === 'published' || propertyBulkPending} onChange={(e) => setSelectedPropertyIds((current) => e.target.checked ? [...new Set([...current, property.id])] : current.filter((id) => id !== property.id))} /></td><td><div className="property-admin-name">{property.imageUrls[0] ? <img src={property.imageUrls[0]} alt="" /> : <Building2 size={20} />}<div><b>{property.title}</b><small>{property.location}</small>{!property.imageUrls.length && <small className="admin-photo-needed">Photo needed before publishing</small>}</div></div></td><td>{property.landArea}</td><td>{money(property.priceUgx)}</td><td><StatusPill value={property.status} /></td><td><div className="admin-row-actions"><button className="small-action" onClick={() => editPropertyListing(property)} data-testid={`button-edit-property-${property.id}`}>Edit</button>{property.status === 'published' ? <button className="small-action" onClick={() => changePropertyStatus(property, 'draft')}>Unpublish</button> : property.status === 'archived' ? <button className="small-action" onClick={() => changePropertyStatus(property, 'draft')}>Restore</button> : <button className="small-action" onClick={() => changePropertyStatus(property, 'published')}>Publish</button>}{property.status !== 'archived' && <button className="small-action danger-action" onClick={() => changePropertyStatus(property, 'archived')}>Archive</button>}</div></td></tr>)}</tbody></table></div>
             <div className="property-result-bar"><span>Showing {(propertyPage - 1) * adminPropertyPageSize + 1} to {Math.min(propertyPage * adminPropertyPageSize, adminPropertyTotal)} of {adminPropertyTotal} listings</span><span>Page {propertyPage} of {adminPropertyPageCount}</span></div>
             {adminPropertyPageCount > 1 && <nav className="catalog-pagination" aria-label="Admin property listings pagination"><button type="button" className="pagination-step" onClick={() => setPropertyPage((page) => Math.max(1, page - 1))} disabled={propertyPage <= 1}>Previous</button>{pageSequence(propertyPage, adminPropertyPageCount).map((item, index) => item === 'ellipsis' ? <span key={`admin-ellipsis-${index}`} className="pagination-ellipsis" aria-hidden="true">…</span> : <button type="button" key={item} className="pagination-number" onClick={() => setPropertyPage(item)} aria-label={`Go to property page ${item}`} aria-current={propertyPage === item ? 'page' : undefined}>{item}</button>)}<button type="button" className="pagination-step" onClick={() => setPropertyPage((page) => Math.min(adminPropertyPageCount, page + 1))} disabled={propertyPage >= adminPropertyPageCount}>Next</button></nav>}
-          </> : <AdminEmpty icon={Building2} title={appliedPropertySearch || propertyStatus ? 'No listings match these filters' : 'No saved property listings yet'} copy={appliedPropertySearch || propertyStatus ? 'Try a broader search or clear the filters.' : 'The public page currently features the Naalya opportunity. Prepare it here to save and manage it as a regular listing.'} action={appliedPropertySearch || propertyStatus ? <button className="text-button" onClick={() => { setPropertyForm(true); setEditingProperty(null); setPrefillNalyaProperty(false); setUploadedPropertyUrls([]); }}>Add a property <Plus size={15} /></button> : <div className="property-admin-empty-actions"><button className="button button-primary" onClick={() => { setPropertyForm(true); setEditingProperty(null); setPrefillNalyaProperty(true); setUploadedPropertyUrls([]); }}>Prepare Naalya listing <Plus size={15} /></button><button className="text-button" onClick={() => { setPropertyForm(true); setEditingProperty(null); setPrefillNalyaProperty(false); setUploadedPropertyUrls([]); }}>Add a different property <Plus size={15} /></button></div>} />}
+          </> : <AdminEmpty icon={Building2} title={appliedPropertySearch || propertyStatus ? 'No listings match these filters' : 'No saved property listings yet'} copy={appliedPropertySearch || propertyStatus ? 'Try a broader search or clear the filters.' : 'Add a property manually or import a property CSV. Only records saved here and marked published appear on the public site.'} action={<button className="text-button" onClick={() => { setPropertyForm(true); setEditingProperty(null); setUploadedPropertyUrls([]); }}>Add a property <Plus size={15} /></button>} />}
         </div>
       </>}
-      {tab === 'categories' && <><div className="admin-title-row"><div><span className="eyebrow">CATALOGUE ORGANISATION</span><h1>Categories</h1><p>Keep product groups useful and easy to browse.</p></div><button className="button button-primary" onClick={() => { setCategoryForm(!categoryForm); setEditingCategory(null); }} data-testid="button-create-category"><Plus size={16} /> Add category</button></div>
+      {tab === 'categories' && <><div className="admin-title-row"><div><span className="eyebrow">CATALOGUE ORGANISATION</span><h1>Categories</h1><p>Keep product groups useful and easy to browse.</p></div><div className="catalog-export-actions"><Button variant="outline" onClick={() => void createMissingProductCategories()} disabled={adminCategories.isLoading || adminCategories.isError || categorySetupPending || !missingSuggestedProductCategories.length} testid="button-create-missing-product-categories"><Tag size={15} /> {categorySetupPending ? 'Creating…' : missingSuggestedProductCategories.length ? `Add missing categories (${missingSuggestedProductCategories.length})` : 'Suggested categories added'}</Button><button className="button button-primary" onClick={() => { setCategoryForm(!categoryForm); setEditingCategory(null); }} data-testid="button-create-category"><Plus size={16} /> Add category</button></div></div>
         {categoryForm && <CategoryForm key={editingCategory?.id ?? 'new-category'} initial={editingCategory ?? undefined} pending={createCategory.isPending || updateCategory.isPending} onCancel={() => { setCategoryForm(false); setEditingCategory(null); }} onSubmit={(data) => {
           const onSuccess = () => { setCategoryForm(false); setEditingCategory(null); setMessage(editingCategory ? 'Category updated.' : 'Category created.'); void refreshAdmin(); };
           const onError = () => setMessage('Category could not be saved. Check the name and slug.');
