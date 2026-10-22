@@ -418,7 +418,7 @@ function Home() {
           <span className="company-eyebrow"><span /> CANDID REALTORS &amp; IT SOLUTIONS LIMITED</span>
           <h1>Technology for business.<br /><em>Land for what comes next.</em></h1>
           <p>CRITS Limited brings practical technology supply and strategic real estate facilitation together, helping people, organisations and investors move forward with clarity.</p>
-          <div className="company-hero-actions"><Button href="/technology" variant="orange">Explore technology <ArrowRight size={16} /></Button><Button href="/real-estate" variant="outline">Discover real estate <ArrowUpRight size={16} /></Button></div>
+          <div className="company-hero-actions"><Button href="/technology" variant="orange">IT Solutions <ArrowRight size={16} /></Button><Button href="/real-estate" variant="outline">Real Estate <ArrowUpRight size={16} /></Button></div>
           <div className="company-values"><span>Quality</span><i /><span>Innovation</span><i /><span>Reliability</span></div>
         </div>
         <div className="company-hero-art" aria-hidden="true">
