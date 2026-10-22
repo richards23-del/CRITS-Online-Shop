@@ -426,7 +426,7 @@ function Home() {
           <div className="company-art-building"><span /><span /><span /><span /><span /><span /><span /><span /><span /></div>
           <div className="company-art-land"><i /><i /><i /></div>
           <div className="company-art-chip chip-tech"><HardDrive size={18} /><span>Business technology</span></div>
-          <div className="company-art-chip chip-land"><MapPin size={18} /><span>Strategic land</span></div>
+          <div className="company-art-chip chip-land"><MapPin size={18} /><span>Real estate</span></div>
           <div className="company-art-signature">CRITS <small>LIMITED</small></div>
         </div>
       </div>
@@ -442,7 +442,7 @@ function Home() {
       <div className="site-width"><div className="company-section-heading"><span className="eyebrow">WHAT WE DO</span><h2>Two ways we help you move forward.</h2></div>
         <div className="company-division-grid">
           <article className="company-division-card division-tech"><div className="division-icon"><HardDrive size={23} /></div><span className="eyebrow">01 · TECHNOLOGY</span><h3>Business IT, made clearer.</h3><p>Explore technology products for business and get support finding a setup that fits the way you work.</p><div className="division-link-row"><Link href="/catalog">Browse the catalogue <ArrowRight size={16} /></Link><Link href="/services">IT services <ArrowUpRight size={16} /></Link></div></article>
-          <article className="company-division-card division-property"><div className="division-icon"><MapPin size={23} /></div><span className="eyebrow">02 · REAL ESTATE</span><h3>Strategic land. Informed investment.</h3><p>We connect landowners, buyers, developers and institutions with property opportunities across Uganda.</p><div className="division-link-row"><Link href="/real-estate">Explore CRITS Land Department <ArrowRight size={16} /></Link></div></article>
+          <article className="company-division-card division-property"><div className="division-icon"><MapPin size={23} /></div><span className="eyebrow">02 · REAL ESTATE</span><h3>Real estate. Informed investment.</h3><p>We connect landowners, buyers, developers and institutions with property opportunities across Uganda.</p><div className="division-link-row"><Link href="/real-estate">Explore CRITS Land Department <ArrowRight size={16} /></Link></div></article>
         </div>
       </div>
     </section>
@@ -508,7 +508,7 @@ function RealEstatePage() {
   };
   return <Shell>
     <section className="estate-hero"><div className="site-width estate-hero-grid">
-      <div className="estate-hero-copy page-enter"><div className="estate-kicker"><MapPin size={15} /> CANDID REALTORS &amp; IT SOLUTIONS LIMITED</div><span className="eyebrow">CRITS LAND DEPARTMENT</span><h1>Strategic land.<br /><em>Informed investment.</em></h1><p>Professional real estate services that connect landowners, investors, developers, institutions and businesses with opportunities across Uganda.</p><div className="company-hero-actions"><a className="button button-orange" href="#property-results">Browse property listings <ArrowRight size={16} /></a><a className="button button-outline" href={replacementPhoneHref}>Call {replacementPhone} <Phone size={15} /></a></div></div>
+      <div className="estate-hero-copy page-enter"><div className="estate-kicker"><MapPin size={15} /> CANDID REALTORS &amp; IT SOLUTIONS LIMITED</div><span className="eyebrow">CRITS LAND DEPARTMENT</span><h1>Real estate.<br /><em>Informed investment.</em></h1><p>Professional real estate services that connect landowners, investors, developers, institutions and businesses with opportunities across Uganda.</p><div className="company-hero-actions"><a className="button button-orange" href="#property-results">Browse property listings <ArrowRight size={16} /></a><a className="button button-outline" href={replacementPhoneHref}>Call {replacementPhone} <Phone size={15} /></a></div></div>
       <div className="estate-hero-visual" aria-hidden="true"><div className="estate-map-lines" /><div className="estate-parcel parcel-one" /><div className="estate-parcel parcel-two" /><div className="estate-parcel parcel-three" /><div className="estate-map-pin"><MapPin size={25} /><span>UGANDA</span></div><div className="estate-map-caption">LOCATION<br /><b>MEETS POTENTIAL</b></div></div>
     </div></section>
     <section className="estate-overview site-width"><div><span className="eyebrow">ABOUT THE DEPARTMENT</span><h2>Connecting land and opportunity.</h2></div><div><p>CRITS Land Department is the real estate and land investment division of CANDID REALTORS &amp; IT SOLUTIONS LIMITED. We facilitate strategic property transactions and help unlock the value of land through professional services, solutions for investors and trusted business relationships.</p><p>Our work spans land ownership, property investment and development, supporting informed decisions for residential, commercial, industrial and agricultural needs.</p></div></section>
